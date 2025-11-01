@@ -149,18 +149,33 @@ func lrangeHandler(conn *RedisConnection, args ...string) {
 func lPushHandler(conn *RedisConnection, args ...string) {
 	if len(args) < 2 {
 		conn.sendResponse(ToNullBulkString())
-	} else {
-		key, value := args[0], args[1:]
-		list_store.Update(key, func(old []string) []string {
-			new_list := make([]string, len(old))
-			copy(new_list, old)
-			for _, v := range value {
-				new_list = slices.Insert(new_list, 0, v)
-			}
-			defer conn.sendResponse(ToRespInt(len(new_list)))
-			return new_list
-		})
+		return
 	}
+	key, value := args[0], args[1:]
+	list_store.Update(key, func(old []string) []string {
+		new_list := make([]string, len(old))
+		copy(new_list, old)
+		for _, v := range value {
+			new_list = slices.Insert(new_list, 0, v)
+		}
+		defer conn.sendResponse(ToRespInt(len(new_list)))
+		return new_list
+	})
+}
+
+func llenHandler(conn *RedisConnection, args ...string) {
+	if len(args) < 1 {
+		conn.sendResponse(ToNullBulkString())
+		return
+	}
+
+	key := args[0]
+	list, ok := list_store.Load(key)
+	if !ok {
+		list = make([]string, 0)
+	}
+
+	conn.sendResponse(ToRespInt(len(list)))
 }
 
 var handlers = map[string]func (*RedisConnection, ...string) {
@@ -171,4 +186,5 @@ var handlers = map[string]func (*RedisConnection, ...string) {
 	"LPUSH": lPushHandler,
 	"RPUSH": rPushHandler,
 	"LRANGE": lrangeHandler,
+	"LLEN": llenHandler,
 }
