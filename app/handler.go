@@ -178,6 +178,24 @@ func llenHandler(conn *RedisConnection, args ...string) {
 	conn.sendResponse(ToRespInt(len(list)))
 }
 
+func lpopHandler(conn *RedisConnection, args ...string) {
+	if len(args) < 1 {
+		conn.sendResponse(ToNullBulkString())
+		return
+	}
+
+	key := args[0]
+	list_store.Update(key, func(old []string) []string {
+		if len(old) == 0 {
+			conn.sendResponse(ToNullBulkString())
+			return make([]string, 0)
+		}
+
+		defer conn.sendResponse(ToBulkString(old[0]))
+		return old[1:]
+	})
+}
+
 var handlers = map[string]func (*RedisConnection, ...string) {
 	"PING": pingHandler,
 	"ECHO": echoHandler,
@@ -187,4 +205,5 @@ var handlers = map[string]func (*RedisConnection, ...string) {
 	"RPUSH": rPushHandler,
 	"LRANGE": lrangeHandler,
 	"LLEN": llenHandler,
+	"LPOP": lpopHandler,
 }
