@@ -68,18 +68,30 @@ func (conn *RedisConnection) handleRequest (data string) {
 		return
 	}
 
-	n_commands := len(commands)
-	for i := 0; i < n_commands; i++ {
-		command := strings.ToUpper(strings.TrimSpace(commands[i]))
-		args := commands[i + 1:]
-		fmt.Printf("Executing command: %s\n", command)
+	// n_commands := len(commands)
+	// for i := 0; i < n_commands; i++ {
+	// 	command := strings.ToUpper(strings.TrimSpace(commands[i]))
+	// 	args := commands[i + 1:]
+	// 	fmt.Printf("Executing command: %s\n", command)
 		
-		handler, ok := handlers[command]
-		if !ok {
-			fmt.Printf("Unknown command %s, no handlers found!", command)
-			return
-		}
+	// 	handler, ok := handlers[command]
+	// 	if !ok {
+	// 		fmt.Printf("Unknown command %s, no handlers found!", command)
+	// 		return
+	// 	}
 
-		handler(conn, args...)
+	// 	handler(conn, args...)
+	// }
+
+	command := strings.ToUpper(strings.TrimSpace(commands[0]))
+	args := commands[1:]
+	fmt.Printf("Executing command: %s\n", command)
+	
+	handler, ok := handlers[command]
+	if !ok {
+		fmt.Printf("Unknown command %s, no handlers found!", command)
+		return
 	}
+
+	handler(conn, args...)
 }

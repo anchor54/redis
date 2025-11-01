@@ -185,14 +185,27 @@ func lpopHandler(conn *RedisConnection, args ...string) {
 	}
 
 	key := args[0]
+	n_ele_to_rem := 1
+
+	if len(args) > 1 {
+		n_ele_to_rem, _ = strconv.Atoi(args[1])
+	}
+	
 	list_store.Update(key, func(old []string) []string {
-		if len(old) == 0 {
+		n := len(old)
+
+		if n == 0 {
 			conn.sendResponse(ToNullBulkString())
 			return make([]string, 0)
 		}
-
-		defer conn.sendResponse(ToBulkString(old[0]))
-		return old[1:]
+		
+		n_ele_to_rem = min(n_ele_to_rem, n)
+		if len(args) > 1 {
+			defer conn.sendResponse(ToArray(old[:n_ele_to_rem]))
+		} else {
+			defer conn.sendResponse(ToBulkString(old[0]))
+		}
+		return old[n_ele_to_rem:]
 	})
 }
 
