@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"sync"
+	"strconv"
+	"time"
 )
 
-var KV_store sync.Map
+var KV_store SyncMap[string, string]
+var key_expiry_store SyncMap[string, *time.Timer]
 
 func (conn *RedisConnection) sendResponse(message string) {
 	fmt.Printf("Sending %q\n", message)
@@ -36,6 +38,35 @@ func setHandler(conn *RedisConnection, args ...string) {
 	} else {
 		key, value := args[0], args[1]
 		KV_store.Store(key, value)
+
+		// check if expiry is set
+		if len(args) >= 4 {
+			if timer, ok := key_expiry_store.Load(key); ok {
+				timer.Stop()
+			}
+
+			exp_time, err := strconv.Atoi(args[3])
+
+			if err != nil {
+				conn.sendResponse(ToNullBulkString())
+				return
+			}
+
+			switch exp_type := args[2]; exp_type {
+			case "EX":
+				timer := time.AfterFunc(time.Duration(exp_time) * time.Second, func() {
+					KV_store.Delete(key)
+				})
+				key_expiry_store.Store(key, timer)
+
+			case "PX":
+				timer := time.AfterFunc(time.Duration(exp_time) * time.Millisecond, func() {
+					KV_store.Delete(key)
+				})
+				key_expiry_store.Store(key, timer)
+			}
+		}
+
 		conn.sendResponse(ToSimpleString("OK"))
 	}
 }
@@ -48,7 +79,7 @@ func getHandler(conn *RedisConnection, args ...string) {
 		if !ok {
 			conn.sendResponse(ToNullBulkString())
 		} else {
-			conn.sendResponse(ToBulkString(val.(string)))
+			conn.sendResponse(ToBulkString(val))
 		}
 	}
 }
