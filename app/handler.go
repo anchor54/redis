@@ -99,10 +99,47 @@ func listPushHandler(conn *RedisConnection, args ...string) {
 	}
 }
 
+func lrangeHandler(conn *RedisConnection, args ...string) {
+	if len(args) < 3 {
+		conn.sendResponse(ToNullBulkString())
+	} else {
+		key := args[0]
+		l, err := strconv.Atoi(args[1])
+
+		if err != nil {
+			conn.sendResponse(ToNullBulkString())
+		}
+
+		r, err := strconv.Atoi(args[2])
+
+		if err != nil {
+			conn.sendResponse(ToNullBulkString())
+		}
+
+		list, ok := list_store.Load(key)
+	
+		if !ok {
+			conn.sendResponse(ToArray(make([]string, 0)))
+			return
+		}
+
+		n := len(list)
+		r = min(r, n - 1)
+
+		if l >= n || l > r {
+			conn.sendResponse(ToArray(make([]string, 0)))
+			return
+		}
+
+		conn.sendResponse(ToArray(list[l : r + 1]))
+	}
+}
+
 var handlers = map[string]func (*RedisConnection, ...string) {
 	"PING": pingHandler,
 	"ECHO": echoHandler,
 	"SET": setHandler,
 	"GET": getHandler,
 	"RPUSH": listPushHandler,
+	"LRANGE": lrangeHandler,
 }
