@@ -90,9 +90,9 @@ func listPushHandler(conn *RedisConnection, args ...string) {
 	if len(args) < 2 {
 		conn.sendResponse(ToNullBulkString())
 	} else {
-		key, value := args[0], args[1]
+		key, value := args[0], args[1:]
 		list_store.Update(key, func(old []string) []string {
-			new_list := append(old, value)
+			new_list := append(old, value...)
 			defer conn.sendResponse(ToRespInt(len(new_list)))
 			return new_list
 		})
