@@ -1,12 +1,25 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"os"
 	"strings"
 )
+
+type RedisConnection struct {
+	net.Conn
+}
+
+func (conn *RedisConnection) sendResponse(message string) {
+	fmt.Printf("Sending %q\n", message)
+	n, err := conn.Write([]byte(message))
+	if err != nil {
+		fmt.Printf("An error occurred when writing data back: %s", err.Error())
+		os.Exit(1)
+	}
+	fmt.Printf("wrote %d bytes\n", n)
+}
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -31,36 +44,57 @@ func main() {
 		// accept connection
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Printf("An Error occured when accepting connection: %s\n", err.Error())
+			fmt.Printf("An qrror occured when accepting connection: %s\n", err.Error())
 			// exit on error
 			os.Exit(1)
 		}
 		
-		go func (conn net.Conn)  {
-			// try to read data from the accepted connection
-			scanner := bufio.NewScanner(conn)
-		
-			// convert received data from byte to string
-			if err != nil {
-				fmt.Printf("An error occurred when parsing the command: %s", err.Error())
-				os.Exit(1)
-			}
+		go handleSession(&RedisConnection{conn})
+	}
+}
 
-			for scanner.Scan() {
-				command := strings.TrimSpace(scanner.Text())
-				fmt.Printf("Executing command: %s\n", command)
-				// if the data is PING we should write back PONG
-				if command == "PING" {
-					_, err = conn.Write([]byte("+PONG\r\n"))
-					if err != nil {
-						fmt.Printf("An error occurred when writing data back: %s", err.Error())
-						os.Exit(1)
-					}
-				}
-			} 
-			
-			conn.Close()
+func handleSession (conn *RedisConnection) {
+	buf := make([]byte, 1024)
+	
+	defer conn.Close()
+	
+	// try to read data from the accepted connection
+	n, err := conn.Read(buf)
+	for ; n > 0 && err == nil; n, err = conn.Read(buf) {
+		conn.handleRequest(string(buf[:n]))
+	}
+	
+	if err != nil {
+		fmt.Printf("An error occurred when reading data: %s", err.Error())
+		return
+	}
+}
+
+func (conn *RedisConnection) handleRequest (data string) {
+	// convert received data from byte to string
+	commands, err := ParseRESPArray(data)
+	if err != nil {
+		fmt.Printf("An error occurred when parsing the command: %s", err.Error())
+		return
+	}
+
+	n_commands := len(commands)
+	for i := 0; i < n_commands; i++ {
+		command := strings.ToUpper(strings.TrimSpace(commands[i]))
+		fmt.Printf("Executing command: %s\n", command)
 		
-		}(conn)
+		switch command {
+			// if the data is PING we should write back PONG
+		case "PING":
+			conn.sendResponse(ToRespString("PONG"))
+
+		case "ECHO":
+			if i + 1 < n_commands {
+				conn.sendResponse(ToRespString(commands[i + 1]))
+				i++
+			} else {
+				conn.sendResponse(ToRespString(""))
+			}
+		}
 	}
 }
