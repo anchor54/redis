@@ -124,8 +124,18 @@ func lrangeHandler(conn *RedisConnection, args ...string) {
 		}
 
 		n := len(list)
-		r = min(r, n - 1)
-
+		
+		if r < 0 {
+			r += n
+		}
+		
+		if l < 0 {
+			l += n
+		}
+		
+		r = max(0, min(r, n - 1))
+		l = max(0, min(l, n - 1))
+		
 		if l >= n || l > r {
 			conn.sendResponse(ToArray(make([]string, 0)))
 			return
