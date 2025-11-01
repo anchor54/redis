@@ -58,6 +58,26 @@ func ParseRESPArray(resp string) ([]string, error) {
 	return result, nil
 }
 
-func ToRespString(s string) string {
+// ToSimpleString converts a Go string to a RESP Simple String.
+func ToSimpleString(s string) string {
 	return fmt.Sprintf("+%s\r\n", s)
+}
+
+// ToBulkString converts a Go string to a RESP Bulk String.
+func ToBulkString(s string) string {
+	return fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)
+}
+
+// ToNullBulkString returns the RESP representation of a null bulk string.
+func ToNullBulkString() string {
+	return "$-1\r\n"
+}
+
+// ToArray converts a slice of strings to a RESP Array of Bulk Strings.
+func ToArray(elements []string) string {
+	result := fmt.Sprintf("*%d\r\n", len(elements))
+	for _, e := range elements {
+		result += ToBulkString(e)
+	}
+	return result
 }

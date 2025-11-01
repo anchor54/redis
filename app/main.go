@@ -11,16 +11,6 @@ type RedisConnection struct {
 	net.Conn
 }
 
-func (conn *RedisConnection) sendResponse(message string) {
-	fmt.Printf("Sending %q\n", message)
-	n, err := conn.Write([]byte(message))
-	if err != nil {
-		fmt.Printf("An error occurred when writing data back: %s", err.Error())
-		os.Exit(1)
-	}
-	fmt.Printf("wrote %d bytes\n", n)
-}
-
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -81,20 +71,15 @@ func (conn *RedisConnection) handleRequest (data string) {
 	n_commands := len(commands)
 	for i := 0; i < n_commands; i++ {
 		command := strings.ToUpper(strings.TrimSpace(commands[i]))
+		args := commands[i + 1:]
 		fmt.Printf("Executing command: %s\n", command)
 		
-		switch command {
-			// if the data is PING we should write back PONG
-		case "PING":
-			conn.sendResponse(ToRespString("PONG"))
-
-		case "ECHO":
-			if i + 1 < n_commands {
-				conn.sendResponse(ToRespString(commands[i + 1]))
-				i++
-			} else {
-				conn.sendResponse(ToRespString(""))
-			}
+		handler, ok := handlers[command]
+		if !ok {
+			fmt.Printf("Unknown command %s, no handlers found!", command)
+			return
 		}
+
+		handler(conn, args...)
 	}
 }
