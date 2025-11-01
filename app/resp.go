@@ -73,6 +73,11 @@ func ToNullBulkString() string {
 	return "$-1\r\n"
 }
 
+// ToRespInt returns the RESP representation of an integer value in string
+func ToRespInt(n int) string {
+	return fmt.Sprintf(":%d\r\n", n)
+}
+
 // ToArray converts a slice of strings to a RESP Array of Bulk Strings.
 func ToArray(elements []string) string {
 	result := fmt.Sprintf("*%d\r\n", len(elements))

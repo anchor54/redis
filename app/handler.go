@@ -9,6 +9,8 @@ import (
 
 var KV_store SyncMap[string, string]
 var key_expiry_store SyncMap[string, *time.Timer]
+var list_store SyncMap[string, []string]
+
 
 func (conn *RedisConnection) sendResponse(message string) {
 	fmt.Printf("Sending %q\n", message)
@@ -84,9 +86,23 @@ func getHandler(conn *RedisConnection, args ...string) {
 	}
 }
 
+func listPushHandler(conn *RedisConnection, args ...string) {
+	if len(args) < 2 {
+		conn.sendResponse(ToNullBulkString())
+	} else {
+		key, value := args[0], args[1]
+		list_store.Update(key, func(old []string) []string {
+			new_list := append(old, value)
+			defer conn.sendResponse(ToRespInt(len(new_list)))
+			return new_list
+		})
+	}
+}
+
 var handlers = map[string]func (*RedisConnection, ...string) {
 	"PING": pingHandler,
 	"ECHO": echoHandler,
 	"SET": setHandler,
 	"GET": getHandler,
+	"RPUSH": listPushHandler,
 }
