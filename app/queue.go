@@ -77,7 +77,7 @@ func (d *Deque[T]) PushBack(items ...T) int {
 	return item_count
 }
 
-func (d *Deque[T]) PopFront(timeout int) (T, bool) {
+func (d *Deque[T]) PopFront(timeout float64) (T, bool) {
 	var zero T
 	
 	d.mu.Lock()
@@ -104,7 +104,8 @@ func (d *Deque[T]) PopFront(timeout int) (T, bool) {
 	}
 
 	// case 2.2: definite timer
-	timer := time.NewTimer(time.Duration(timeout))
+	timer := time.NewTimer(time.Duration(timeout * float64(time.Second)))
+	defer timer.Stop()
 
 	// 1. wait till either timer completes or producer sends an item
 	select {

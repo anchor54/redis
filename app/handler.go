@@ -183,7 +183,7 @@ func blpopHandler(args ...string) (string, error) {
 	}
 
 	key := args[0]
-	timeout, _ := strconv.Atoi(args[1])
+	timeout, _ := strconv.ParseFloat(args[1], 32)
 	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
 
 	val, ok := dq.PopFront(timeout)
