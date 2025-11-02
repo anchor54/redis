@@ -80,6 +80,10 @@ func ToRespInt(n int) string {
 
 // ToArray converts a slice of strings to a RESP Array of Bulk Strings.
 func ToArray(elements []string) string {
+	if elements == nil {
+		return "*-1\r\n"
+	}
+
 	result := fmt.Sprintf("*%d\r\n", len(elements))
 	for _, e := range elements {
 		result += ToBulkString(e)

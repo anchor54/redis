@@ -65,3 +65,30 @@ func (sm *SyncMap[K, V]) getOrCreateEntry(key K) (*entry[V], bool) {
 	actual, loaded := sm.m.LoadOrStore(key, e)
 	return actual.(*entry[V]), loaded
 }
+
+// LoadOrStore returns the existing value if present, otherwise stores and returns value.
+// The returned value is a copy of the stored V and loaded==true if there was an existing value.
+func (sm *SyncMap[K, V]) LoadOrStore(key K, value V) (V, bool) {
+	// Try fast path: load
+	actual, ok := sm.m.Load(key)
+	if ok {
+		e := actual.(*entry[V])
+		e.mu.Lock()
+		val := e.val
+		e.mu.Unlock()
+		return val, true
+	}
+	// Not present — create an entry containing the provided value
+	newE := &entry[V]{val: value}
+	actual, loaded := sm.m.LoadOrStore(key, newE)
+	if loaded {
+		// someone else stored concurrently; return their value
+		e := actual.(*entry[V])
+		e.mu.Lock()
+		val := e.val
+		e.mu.Unlock()
+		return val, true
+	}
+	// we stored newE
+	return value, false
+}

@@ -1,17 +1,20 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"time"
 )
 
 var KV_store SyncMap[string, string]
 var key_expiry_store SyncMap[string, *time.Timer]
-var list_store SyncMap[string, []string]
+var list_store SyncMap[string, *Deque[string]]
 
+var INVALID_ARGUMENTS_ERROR = "Invalid argumetns"
+var OK_RESPONSE = "OK"
+var SOMETHING_WENT_WRONG = "Something went wrong"
 
 func (conn *RedisConnection) sendResponse(message string) {
 	fmt.Printf("Sending %q\n", message)
@@ -23,21 +26,21 @@ func (conn *RedisConnection) sendResponse(message string) {
 	fmt.Printf("wrote %d bytes\n", n)
 }
 
-func pingHandler(conn *RedisConnection, args ...string) {
-	conn.sendResponse(ToSimpleString("PONG"))
+func pingHandler(args ...string) (string, error) {
+	return ToSimpleString("PONG"), nil
 }
 
-func echoHandler(conn *RedisConnection, args ...string) {
+func echoHandler(args ...string) (string, error) {
 	if len(args) == 0 {
-		conn.sendResponse(ToNullBulkString())
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	} else {
-		conn.sendResponse(ToSimpleString(args[0]))
+		return ToSimpleString(args[0]), nil
 	}
 }
 
-func setHandler(conn *RedisConnection, args ...string) {
+func setHandler(args ...string) (string, error) {
 	if len(args) < 2 {
-		conn.sendResponse(ToNullBulkString())
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	} else {
 		key, value := args[0], args[1]
 		KV_store.Store(key, value)
@@ -51,8 +54,7 @@ func setHandler(conn *RedisConnection, args ...string) {
 			exp_time, err := strconv.Atoi(args[3])
 
 			if err != nil {
-				conn.sendResponse(ToNullBulkString())
-				return
+				return "", err
 			}
 
 			switch exp_type := args[2]; exp_type {
@@ -70,153 +72,137 @@ func setHandler(conn *RedisConnection, args ...string) {
 			}
 		}
 
-		conn.sendResponse(ToSimpleString("OK"))
+		return ToSimpleString(OK_RESPONSE), nil
 	}
 }
 
-func getHandler(conn *RedisConnection, args ...string) {
+func getHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		conn.sendResponse(ToNullBulkString())
-	} else {
-		val, ok := KV_store.Load(args[0])
-		if !ok {
-			conn.sendResponse(ToNullBulkString())
-		} else {
-			conn.sendResponse(ToBulkString(val))
-		}
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	}
+	val, ok := KV_store.Load(args[0])
+	if !ok {
+		return ToNullBulkString(), nil
+	}
+	return ToBulkString(val), nil
 }
 
-func rPushHandler(conn *RedisConnection, args ...string) {
+func lpushHandler(args ...string) (string, error) {
 	if len(args) < 2 {
-		conn.sendResponse(ToNullBulkString())
-	} else {
-		key, value := args[0], args[1:]
-		list_store.Update(key, func(old []string) []string {
-			new_list := append(old, value...)
-			defer conn.sendResponse(ToRespInt(len(new_list)))
-			return new_list
-		})
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	}
-}
 
-func lrangeHandler(conn *RedisConnection, args ...string) {
-	if len(args) < 3 {
-		conn.sendResponse(ToNullBulkString())
-	} else {
-		key := args[0]
-		l, err := strconv.Atoi(args[1])
-
-		if err != nil {
-			conn.sendResponse(ToNullBulkString())
-		}
-
-		r, err := strconv.Atoi(args[2])
-
-		if err != nil {
-			conn.sendResponse(ToNullBulkString())
-		}
-
-		list, ok := list_store.Load(key)
-	
-		if !ok {
-			conn.sendResponse(ToArray(make([]string, 0)))
-			return
-		}
-
-		n := len(list)
-		
-		if r < 0 {
-			r += n
-		}
-		
-		if l < 0 {
-			l += n
-		}
-
-		r = max(0, min(r, n - 1))
-		l = max(0, min(l, n - 1))
-		
-		if l >= n || l > r {
-			conn.sendResponse(ToArray(make([]string, 0)))
-			return
-		}
-
-		conn.sendResponse(ToArray(list[l : r + 1]))
-	}
-}
-
-func lPushHandler(conn *RedisConnection, args ...string) {
-	if len(args) < 2 {
-		conn.sendResponse(ToNullBulkString())
-		return
-	}
 	key, value := args[0], args[1:]
-	list_store.Update(key, func(old []string) []string {
-		new_list := make([]string, len(old))
-		copy(new_list, old)
-		for _, v := range value {
-			new_list = slices.Insert(new_list, 0, v)
-		}
-		defer conn.sendResponse(ToRespInt(len(new_list)))
-		return new_list
-	})
+	reverse(value)
+	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
+	n := dq.PushFront(value...)
+	return ToRespInt(n), nil
 }
 
-func llenHandler(conn *RedisConnection, args ...string) {
+func rpushHandler(args ...string) (string, error) {
+	if len(args) < 2 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	key, value := args[0], args[1:]
+	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
+	n := dq.PushBack(value...)
+	return ToRespInt(n), nil
+}
+
+func lrangeHandler(args ...string) (string, error) {
+	if len(args) < 3 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+	key := args[0]
+	l, err := strconv.Atoi(args[1])
+
+	if err != nil {
+		return "", err
+	}
+
+	r, err := strconv.Atoi(args[2])
+
+	if err != nil {
+		return "", err
+	}
+
+	list, ok := list_store.Load(key)
+
+	if !ok {
+		return ToArray(make([]string, 0)), nil
+	}
+
+	return ToArray(list.LRange(l, r)), nil
+}
+
+func llenHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		conn.sendResponse(ToNullBulkString())
-		return
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	}
 
 	key := args[0]
 	list, ok := list_store.Load(key)
 	if !ok {
-		list = make([]string, 0)
+		return ToRespInt(0), nil
 	}
 
-	conn.sendResponse(ToRespInt(len(list)))
+	return ToRespInt(list.Length()), nil
 }
 
-func lpopHandler(conn *RedisConnection, args ...string) {
+func lpopHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		conn.sendResponse(ToNullBulkString())
-		return
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	}
 
 	key := args[0]
-	n_ele_to_rem := 1
-
-	if len(args) > 1 {
-		n_ele_to_rem, _ = strconv.Atoi(args[1])
+	dq, ok := list_store.Load(key)
+	if !ok {
+		return ToNullBulkString(), nil
 	}
 	
-	list_store.Update(key, func(old []string) []string {
-		n := len(old)
+	if len(args) > 1 {
+		n_ele_to_rem, _ := strconv.Atoi(args[1])
+		removed_elements, n_removed_elements := dq.TryPopN(n_ele_to_rem)
+		if n_removed_elements == 0 {
+			return ToNullBulkString(), nil
+		}
+		return ToArray(removed_elements), nil
+	}
 
-		if n == 0 {
-			conn.sendResponse(ToNullBulkString())
-			return make([]string, 0)
-		}
-		
-		n_ele_to_rem = min(n_ele_to_rem, n)
-		if len(args) > 1 {
-			defer conn.sendResponse(ToArray(old[:n_ele_to_rem]))
-		} else {
-			defer conn.sendResponse(ToBulkString(old[0]))
-		}
-		return old[n_ele_to_rem:]
-	})
+	removed_element, ok := dq.TryPop()
+	if !ok {
+		return ToNullBulkString(), nil
+	}
+	return ToBulkString(removed_element), nil
 }
 
-var handlers = map[string]func (*RedisConnection, ...string) {
+func blpopHandler(args ...string) (string, error) {
+	if len(args) < 2 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	key := args[0]
+	timeout, _ := strconv.Atoi(args[1])
+	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
+
+	val, ok := dq.PopFront(timeout)
+	if !ok {
+		return ToArray(nil), nil
+	}
+
+	return ToArray([]string{key, val}), nil
+}
+
+var handlers = map[string]func (...string) (string, error) {
 	"PING": pingHandler,
 	"ECHO": echoHandler,
 	"SET": setHandler,
 	"GET": getHandler,
-	"LPUSH": lPushHandler,
-	"RPUSH": rPushHandler,
+	"LPUSH": lpushHandler,
+	"RPUSH": rpushHandler,
 	"LRANGE": lrangeHandler,
 	"LLEN": llenHandler,
 	"LPOP": lpopHandler,
+	"BLPOP": blpopHandler,
 }
