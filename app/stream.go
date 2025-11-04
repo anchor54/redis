@@ -2,12 +2,16 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
 
-var ID_NOT_STRICTLY_GREATER_ERROR = "The ID specified in XADD is equal or smaller than the target stream top item"
-var ID_MUST_BE_GREATER_THAN_0_0_ERROR = "The ID specified in XADD must be greater than 0-0"
+var (
+	ErrInvalidPattern       = errors.New("invalid pattern")
+	ErrNotGreaterThanLastID = errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
+	ErrMustBeGreaterThan00  = errors.New("The ID specified in XADD must be greater than 0-0")
+)
 
 type Entry struct {
 	ID     string
@@ -50,48 +54,63 @@ func (s *Stream) AppendEntry(entry *Entry) {
 	s.Entries = append(s.Entries, entry)
 }
 
-func verifyExplicitID(id string) bool {
-	if !strings.Contains(id, "-") {
-		return false
-	}
-	parts := strings.Split(id, "-")
-	if len(parts) != 2 {
-		return false
-	}
-	millisecond, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		return false
-	}
-	seq, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return false
-	}
-	if millisecond < 0 || seq < 0 {
-		return false
-	}
-	return true
-}
-
 func (s *Stream) GenerateEntryID(pattern string) (string, error) {
-	// case 1: explicit id (64351354687-4)
-	if verifyExplicitID(pattern) {
-		// check if the id is greater than 0-0
-		if pattern <= "0-0" {
-			return "", errors.New(ID_MUST_BE_GREATER_THAN_0_0_ERROR)
-		}
+	if !strings.Contains(pattern, "-") {
+		return "", ErrInvalidPattern
+	}
 
-		// check if the id is strictly greater than the last id in the stream
-		last_id := "0-0"
-		if len(s.Entries) > 0 {
-			last_id = s.Entries[len(s.Entries)-1].ID
-		}
+	parts := strings.Split(pattern, "-")
+	if len(parts) != 2 {
+		return "", ErrInvalidPattern
+	}
 
-		if last_id >= pattern {
-			return "", errors.New(ID_NOT_STRICTLY_GREATER_ERROR)
-		}
+	// Parse and validate millisecond part
+	millisecond, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || millisecond < 0 {
+		return "", ErrInvalidPattern
+	}
 
+	// Get last ID or default to "0-0"
+	lastMillisecond, lastSeq := int64(0), int64(0)
+	if len(s.Entries) > 0 {
+		lastParts := strings.Split(s.Entries[len(s.Entries)-1].ID, "-")
+		if len(lastParts) == 2 {
+			lastMillisecond, _ = strconv.ParseInt(lastParts[0], 10, 64)
+			lastSeq, _ = strconv.ParseInt(lastParts[1], 10, 64)
+		}
+	}
+
+	// Case 1: Explicit ID (e.g., "64351354687-4")
+	if seq, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+		if seq < 0 {
+			return "", ErrInvalidPattern
+		}
+		// Check if ID is greater than 0-0
+		if millisecond == 0 && seq == 0 {
+			return "", ErrMustBeGreaterThan00
+		}
+		// Check if ID is strictly greater than last ID
+		if millisecond < lastMillisecond || (millisecond == lastMillisecond && seq <= lastSeq) {
+			return "", ErrNotGreaterThanLastID
+		}
 		return pattern, nil
 	}
 
-	return "", errors.New("invalid pattern")
+	// Case 2: Partial ID with wildcard (e.g., "64351354687-*")
+	if parts[1] != "*" {
+		return "", ErrInvalidPattern
+	}
+
+	// Validate that millisecond is not less than last millisecond
+	if millisecond < lastMillisecond {
+		return "", ErrNotGreaterThanLastID
+	}
+
+	// Generate sequence number
+	seq := int64(0)
+	if millisecond == lastMillisecond {
+		seq = lastSeq + 1
+	}
+
+	return fmt.Sprintf("%d-%d", millisecond, seq), nil
 }
