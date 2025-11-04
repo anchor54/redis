@@ -82,7 +82,7 @@ func lpushHandler(args ...string) (string, error) {
 
 	key, value := args[0], args[1:]
 	reverse(value)
-	dq, _ := db.LoadOrStoreList(key, NewDeque[string]())
+	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
 		return "", errors.New("failed to load or store list")
@@ -98,7 +98,7 @@ func rpushHandler(args ...string) (string, error) {
 	}
 
 	key, value := args[0], args[1:]
-	dq, _ := db.LoadOrStoreList(key, NewDeque[string]())
+	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
 		return "", errors.New("failed to load or store list")
@@ -182,7 +182,7 @@ func blpopHandler(args ...string) (string, error) {
 
 	key := args[0]
 	timeout, _ := strconv.ParseFloat(args[1], 32)
-	dq, _ := db.LoadOrStoreList(key, NewDeque[string]())
+	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
 		return "", errors.New("failed to load or store list")
@@ -213,9 +213,25 @@ func typeHandler(args ...string) (string, error) {
 		return ToBulkString("string"), nil
 	case RList:
 		return ToBulkString("list"), nil
+	case RStream:
+		return ToBulkString("stream"), nil
 	default:
 		return ToBulkString("none"), nil
 	}
+}
+
+func xaddHandler(args ...string) (string, error) {
+	if len(args) < 4 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	key, entry_id := args[0], args[1]
+	fields := args[2:]
+
+	kv_obj := CreateEntry(entry_id, fields...)
+	stream, _ := db.LoadOrStoreStream(key)
+	stream.AppendEntry(kv_obj)
+	return ToBulkString(kv_obj.ID), nil
 }
 
 var handlers = map[string]func(...string) (string, error){
@@ -230,4 +246,5 @@ var handlers = map[string]func(...string) (string, error){
 	"LPOP":   lpopHandler,
 	"BLPOP":  blpopHandler,
 	"TYPE":   typeHandler,
+	"XADD":   xaddHandler,
 }

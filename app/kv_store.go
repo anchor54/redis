@@ -9,6 +9,10 @@ type KVStore struct {
 	store SyncMap[string, RedisObject]
 }
 
+func (store *KVStore) Delete(key string) {
+	store.store.Delete(key)
+}
+
 func (store *KVStore) Store(key string, value *RedisObject) {
 	store.store.Store(key, value)
 }
@@ -48,8 +52,8 @@ func (store *KVStore) StoreList(key string, value *Deque[string]) {
 	store.store.Store(key, &kv_obj)
 }
 
-func (store *KVStore) LoadOrStoreList(key string, value *Deque[string]) (*Deque[string], bool) {
-	kv_obj := NewListObject(value)
+func (store *KVStore) LoadOrStoreList(key string) (*Deque[string], bool) {
+	kv_obj := NewListObject(NewDeque[string]())
 	val, loaded := store.store.LoadOrStore(key, &kv_obj)
 	list, ok := AsList[string](val.Get())
 	
@@ -60,8 +64,22 @@ func (store *KVStore) LoadOrStoreList(key string, value *Deque[string]) (*Deque[
 	return list, loaded
 }
 
-func (store *KVStore) Delete(key string) {
-	store.store.Delete(key)
+func (store *KVStore) LoadOrStoreStream(key string) (*Stream, bool) {
+	kv_obj := RedisObject{value: NewStream(), ttl: nil}
+	val, loaded := store.store.LoadOrStore(key, &kv_obj)
+	stream, ok := AsStream(val.Get())
+	if !ok {
+		return nil, false
+	}
+	return stream, loaded
+}
+
+func (store *KVStore) GetStream(key string) (*Stream, bool) {
+	val, ok := store.GetValue(key)
+	if !ok {
+		return nil, false
+	}
+	return AsStream(val.Get())
 }
 
 // implement a function to schedule the deletion of the key

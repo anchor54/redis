@@ -11,6 +11,7 @@ type RedisValue interface {
 const (
 	RString RType = iota
 	RList
+	RStream
 	RUnknown
 )
 
