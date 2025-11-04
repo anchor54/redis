@@ -81,7 +81,8 @@ func (conn *RedisConnection) handleRequest (data string) {
 	resp, err := handler(args...)
 
 	if err != nil {
-		fmt.Printf("An error occurred when executing command %s : %s\n", command, err.Error())
+		conn.sendResponse(ToError(err.Error()))
+		return
 	}
 
 	conn.sendResponse(resp)

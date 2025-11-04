@@ -228,10 +228,13 @@ func xaddHandler(args ...string) (string, error) {
 	key, entry_id := args[0], args[1]
 	fields := args[2:]
 
-	kv_obj := CreateEntry(entry_id, fields...)
 	stream, _ := db.LoadOrStoreStream(key)
-	stream.AppendEntry(kv_obj)
-	return ToBulkString(kv_obj.ID), nil
+	entry, err := stream.CreateEntry(entry_id, fields...)
+	if err != nil {
+		return "", err
+	}
+	stream.AppendEntry(entry)
+	return ToBulkString(entry.ID), nil
 }
 
 var handlers = map[string]func(...string) (string, error){

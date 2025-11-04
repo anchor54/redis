@@ -90,3 +90,7 @@ func ToArray(elements []string) string {
 	}
 	return result
 }
+
+func ToError(s string) string {
+	return fmt.Sprintf("-ERR %s\r\n", s)
+}
