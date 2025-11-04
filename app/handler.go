@@ -8,9 +8,7 @@ import (
 	"time"
 )
 
-var KV_store SyncMap[string, string]
-var key_expiry_store SyncMap[string, *time.Timer]
-var list_store SyncMap[string, *Deque[string]]
+var db = KVStore{store: SyncMap[string, RedisObject]{}}
 
 var INVALID_ARGUMENTS_ERROR = "Invalid argumetns"
 var OK_RESPONSE = "OK"
@@ -43,14 +41,11 @@ func setHandler(args ...string) (string, error) {
 		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	} else {
 		key, value := args[0], args[1]
-		KV_store.Store(key, value)
+		kv_obj := NewStringObject(value)
+		db.Store(key, &kv_obj)
 
 		// check if expiry is set
 		if len(args) >= 4 {
-			if timer, ok := key_expiry_store.Load(key); ok {
-				timer.Stop()
-			}
-
 			exp_time, err := strconv.Atoi(args[3])
 
 			if err != nil {
@@ -59,16 +54,9 @@ func setHandler(args ...string) (string, error) {
 
 			switch exp_type := args[2]; exp_type {
 			case "EX":
-				timer := time.AfterFunc(time.Duration(exp_time) * time.Second, func() {
-					KV_store.Delete(key)
-				})
-				key_expiry_store.Store(key, timer)
-
+				kv_obj.SetExpiry(time.Duration(exp_time) * time.Second)
 			case "PX":
-				timer := time.AfterFunc(time.Duration(exp_time) * time.Millisecond, func() {
-					KV_store.Delete(key)
-				})
-				key_expiry_store.Store(key, timer)
+				kv_obj.SetExpiry(time.Duration(exp_time) * time.Millisecond)
 			}
 		}
 
@@ -80,7 +68,7 @@ func getHandler(args ...string) (string, error) {
 	if len(args) < 1 {
 		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	}
-	val, ok := KV_store.Load(args[0])
+	val, ok := db.GetString(args[0])
 	if !ok {
 		return ToNullBulkString(), nil
 	}
@@ -94,7 +82,12 @@ func lpushHandler(args ...string) (string, error) {
 
 	key, value := args[0], args[1:]
 	reverse(value)
-	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
+	dq, _ := db.LoadOrStoreList(key, NewDeque[string]())
+
+	if dq == nil {
+		return "", errors.New("failed to load or store list")
+	}
+
 	n := dq.PushFront(value...)
 	return ToRespInt(n), nil
 }
@@ -105,7 +98,12 @@ func rpushHandler(args ...string) (string, error) {
 	}
 
 	key, value := args[0], args[1:]
-	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
+	dq, _ := db.LoadOrStoreList(key, NewDeque[string]())
+
+	if dq == nil {
+		return "", errors.New("failed to load or store list")
+	}
+
 	n := dq.PushBack(value...)
 	return ToRespInt(n), nil
 }
@@ -127,7 +125,7 @@ func lrangeHandler(args ...string) (string, error) {
 		return "", err
 	}
 
-	list, ok := list_store.Load(key)
+	list, ok := db.GetList(key)
 
 	if !ok {
 		return ToArray(make([]string, 0)), nil
@@ -142,7 +140,7 @@ func llenHandler(args ...string) (string, error) {
 	}
 
 	key := args[0]
-	list, ok := list_store.Load(key)
+	list, ok := db.GetList(key)
 	if !ok {
 		return ToRespInt(0), nil
 	}
@@ -156,11 +154,11 @@ func lpopHandler(args ...string) (string, error) {
 	}
 
 	key := args[0]
-	dq, ok := list_store.Load(key)
+	dq, ok := db.GetList(key)
 	if !ok {
 		return ToNullBulkString(), nil
 	}
-	
+
 	if len(args) > 1 {
 		n_ele_to_rem, _ := strconv.Atoi(args[1])
 		removed_elements, n_removed_elements := dq.TryPopN(n_ele_to_rem)
@@ -184,7 +182,11 @@ func blpopHandler(args ...string) (string, error) {
 
 	key := args[0]
 	timeout, _ := strconv.ParseFloat(args[1], 32)
-	dq, _ := list_store.LoadOrStore(key, NewDeque[string]())
+	dq, _ := db.LoadOrStoreList(key, NewDeque[string]())
+
+	if dq == nil {
+		return "", errors.New("failed to load or store list")
+	}
 
 	val, ok := dq.PopFront(timeout)
 	if !ok {
@@ -194,15 +196,38 @@ func blpopHandler(args ...string) (string, error) {
 	return ToArray([]string{key, val}), nil
 }
 
-var handlers = map[string]func (...string) (string, error) {
-	"PING": pingHandler,
-	"ECHO": echoHandler,
-	"SET": setHandler,
-	"GET": getHandler,
-	"LPUSH": lpushHandler,
-	"RPUSH": rpushHandler,
+func typeHandler(args ...string) (string, error) {
+	if len(args) < 1 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	key := args[0]
+
+	val, ok := db.GetValue(key)
+	if !ok {
+		return ToBulkString("none"), nil
+	}
+
+	switch val.Get().kind() {
+	case RString:
+		return ToBulkString("string"), nil
+	case RList:
+		return ToBulkString("list"), nil
+	default:
+		return ToBulkString("none"), nil
+	}
+}
+
+var handlers = map[string]func(...string) (string, error){
+	"PING":   pingHandler,
+	"ECHO":   echoHandler,
+	"SET":    setHandler,
+	"GET":    getHandler,
+	"LPUSH":  lpushHandler,
+	"RPUSH":  rpushHandler,
 	"LRANGE": lrangeHandler,
-	"LLEN": llenHandler,
-	"LPOP": lpopHandler,
-	"BLPOP": blpopHandler,
+	"LLEN":   llenHandler,
+	"LPOP":   lpopHandler,
+	"BLPOP":  blpopHandler,
+	"TYPE":   typeHandler,
 }

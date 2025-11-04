@@ -9,11 +9,11 @@ type SyncMap[K comparable, V any] struct {
 
 type entry[V any] struct {
 	mu  sync.Mutex
-	val V
+	val *V
 }
 
 // Store overwrites the value for key with per-key lock.
-func (sm *SyncMap[K, V]) Store(key K, value V) {
+func (sm *SyncMap[K, V]) Store(key K, value *V) {
 	e, _ := sm.getOrCreateEntry(key)
 	e.mu.Lock()
 	e.val = value
@@ -21,10 +21,10 @@ func (sm *SyncMap[K, V]) Store(key K, value V) {
 }
 
 // Load returns a copy of the value if present.
-func (sm *SyncMap[K, V]) Load(key K) (V, bool) {
+func (sm *SyncMap[K, V]) Load(key K) (*V, bool) {
 	eVal, ok := sm.m.Load(key)
 	if !ok {
-		var zero V
+		var zero *V
 		return zero, false
 	}
 	e := eVal.(*entry[V])
@@ -35,7 +35,7 @@ func (sm *SyncMap[K, V]) Load(key K) (V, bool) {
 }
 
 // Update applies a function to the current value atomically.
-func (sm *SyncMap[K, V]) Update(key K, fn func(old V) V) {
+func (sm *SyncMap[K, V]) Update(key K, fn func(old *V) *V) {
 	e, _ := sm.getOrCreateEntry(key)
 	e.mu.Lock()
 	e.val = fn(e.val)
@@ -48,7 +48,7 @@ func (sm *SyncMap[K, V]) Delete(key K) {
 }
 
 // Range iterates over all entries (calls fn with copies of the values).
-func (sm *SyncMap[K, V]) Range(fn func(K, V) bool) {
+func (sm *SyncMap[K, V]) Range(fn func(K, *V) bool) {
 	sm.m.Range(func(k, v any) bool {
 		key := k.(K)
 		e := v.(*entry[V])
@@ -68,7 +68,7 @@ func (sm *SyncMap[K, V]) getOrCreateEntry(key K) (*entry[V], bool) {
 
 // LoadOrStore returns the existing value if present, otherwise stores and returns value.
 // The returned value is a copy of the stored V and loaded==true if there was an existing value.
-func (sm *SyncMap[K, V]) LoadOrStore(key K, value V) (V, bool) {
+func (sm *SyncMap[K, V]) LoadOrStore(key K, value *V) (*V, bool) {
 	// Try fast path: load
 	actual, ok := sm.m.Load(key)
 	if ok {
