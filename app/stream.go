@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -54,7 +55,47 @@ func (s *Stream) AppendEntry(entry *Entry) {
 	s.Entries = append(s.Entries, entry)
 }
 
+// parseID parses an ID string into millisecond and sequence parts
+func parseID(id string) (millisecond, seq int64, ok bool) {
+	parts := strings.Split(id, "-")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	millisecond, err1 := strconv.ParseInt(parts[0], 10, 64)
+	seq, err2 := strconv.ParseInt(parts[1], 10, 64)
+	return millisecond, seq, err1 == nil && err2 == nil && millisecond >= 0 && seq >= 0
+}
+
+// getLastID returns the last entry's ID components, or (0, 0) if stream is empty
+func (s *Stream) getLastID() (millisecond, seq int64) {
+	if len(s.Entries) > 0 {
+		if ms, sq, ok := parseID(s.Entries[len(s.Entries)-1].ID); ok {
+			return ms, sq
+		}
+	}
+	return 0, 0
+}
+
+// getMaxSeqForMillisecond finds the maximum sequence number for entries with the given millisecond
+func (s *Stream) getMaxSeqForMillisecond(targetMs int64) int64 {
+	maxSeq := int64(-1)
+	for _, entry := range s.Entries {
+		if ms, seq, ok := parseID(entry.ID); ok && ms == targetMs && seq > maxSeq {
+			maxSeq = seq
+		}
+	}
+	return maxSeq
+}
+
 func (s *Stream) GenerateEntryID(pattern string) (string, error) {
+	// Handle full wildcard pattern: "*"
+	if pattern == "*" {
+		millisecond := time.Now().UnixMilli()
+		maxSeq := s.getMaxSeqForMillisecond(millisecond)
+		return fmt.Sprintf("%d-%d", millisecond, maxSeq+1), nil
+	}
+
+	// Validate pattern format
 	if !strings.Contains(pattern, "-") {
 		return "", ErrInvalidPattern
 	}
@@ -70,27 +111,17 @@ func (s *Stream) GenerateEntryID(pattern string) (string, error) {
 		return "", ErrInvalidPattern
 	}
 
-	// Get last ID or default to "0-0"
-	lastMillisecond, lastSeq := int64(0), int64(0)
-	if len(s.Entries) > 0 {
-		lastParts := strings.Split(s.Entries[len(s.Entries)-1].ID, "-")
-		if len(lastParts) == 2 {
-			lastMillisecond, _ = strconv.ParseInt(lastParts[0], 10, 64)
-			lastSeq, _ = strconv.ParseInt(lastParts[1], 10, 64)
-		}
-	}
+	lastMs, lastSeq := s.getLastID()
 
 	// Case 1: Explicit ID (e.g., "64351354687-4")
 	if seq, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
 		if seq < 0 {
 			return "", ErrInvalidPattern
 		}
-		// Check if ID is greater than 0-0
 		if millisecond == 0 && seq == 0 {
 			return "", ErrMustBeGreaterThan00
 		}
-		// Check if ID is strictly greater than last ID
-		if millisecond < lastMillisecond || (millisecond == lastMillisecond && seq <= lastSeq) {
+		if millisecond < lastMs || (millisecond == lastMs && seq <= lastSeq) {
 			return "", ErrNotGreaterThanLastID
 		}
 		return pattern, nil
@@ -101,14 +132,12 @@ func (s *Stream) GenerateEntryID(pattern string) (string, error) {
 		return "", ErrInvalidPattern
 	}
 
-	// Validate that millisecond is not less than last millisecond
-	if millisecond < lastMillisecond {
+	if millisecond < lastMs {
 		return "", ErrNotGreaterThanLastID
 	}
 
-	// Generate sequence number
 	seq := int64(0)
-	if millisecond == lastMillisecond {
+	if millisecond == lastMs {
 		seq = lastSeq + 1
 	}
 
