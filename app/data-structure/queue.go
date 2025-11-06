@@ -1,4 +1,4 @@
-package main
+package datastructure
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ func NewDeque[T any]() *Deque[T] {
 	return &Deque[T]{data: make([]T, 0), waiters: make([]*Waiter[T], 0)}
 }
 
-func (d *Deque[T]) kind() RType {
+func (d *Deque[T]) Kind() RType {
 	return RList
 }
 

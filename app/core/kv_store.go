@@ -1,12 +1,13 @@
-package main
+package core
 
 import (
 	"fmt"
 	"time"
+	"github.com/codecrafters-io/redis-starter-go/app/data-structure"
 )
 
 type KVStore struct {
-	store SyncMap[string, RedisObject]
+	store datastructure.SyncMap[string, RedisObject]
 }
 
 func (store *KVStore) Delete(key string) {
@@ -36,26 +37,26 @@ func (store *KVStore) GetString(key string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return AsString(val.Get())
+	return datastructure.AsString(val.Get())
 }
 
-func (store *KVStore) GetList(key string) (*Deque[string], bool) {
+func (store *KVStore) GetList(key string) (*datastructure.Deque[string], bool) {
 	val, ok := store.GetValue(key)
 	if !ok {
 		return nil, false
 	}
-	return AsList[string](val.Get())
+	return datastructure.AsList[string](val.Get())
 }
 
-func (store *KVStore) StoreList(key string, value *Deque[string]) {
+func (store *KVStore) StoreList(key string, value *datastructure.Deque[string]) {
 	kv_obj := NewListObject(value)
 	store.store.Store(key, &kv_obj)
 }
 
-func (store *KVStore) LoadOrStoreList(key string) (*Deque[string], bool) {
-	kv_obj := NewListObject(NewDeque[string]())
+func (store *KVStore) LoadOrStoreList(key string) (*datastructure.Deque[string], bool) {
+	kv_obj := NewListObject(datastructure.NewDeque[string]())
 	val, loaded := store.store.LoadOrStore(key, &kv_obj)
-	list, ok := AsList[string](val.Get())
+	list, ok := datastructure.AsList[string](val.Get())
 	
 	if !ok {
 		return nil, false
@@ -64,22 +65,22 @@ func (store *KVStore) LoadOrStoreList(key string) (*Deque[string], bool) {
 	return list, loaded
 }
 
-func (store *KVStore) LoadOrStoreStream(key string) (*Stream, bool) {
-	kv_obj := RedisObject{value: NewStream(), ttl: nil}
+func (store *KVStore) LoadOrStoreStream(key string) (*datastructure.Stream, bool) {
+	kv_obj := RedisObject{value: datastructure.NewStream(), ttl: nil}
 	val, loaded := store.store.LoadOrStore(key, &kv_obj)
-	stream, ok := AsStream(val.Get())
+	stream, ok := datastructure.AsStream(val.Get())
 	if !ok {
 		return nil, false
 	}
 	return stream, loaded
 }
 
-func (store *KVStore) GetStream(key string) (*Stream, bool) {
+func (store *KVStore) GetStream(key string) (*datastructure.Stream, bool) {
 	val, ok := store.GetValue(key)
 	if !ok {
 		return nil, false
 	}
-	return AsStream(val.Get())
+	return datastructure.AsStream(val.Get())
 }
 
 // implement a function to schedule the deletion of the key

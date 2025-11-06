@@ -1,10 +1,10 @@
-package main
+package datastructure
 
 type StringValue struct {
 	S string
 }
 
-func (s StringValue) kind() RType {
+func (s StringValue) Kind() RType {
 	return RString
 }
 

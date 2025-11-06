@@ -1,38 +1,29 @@
-package main
+package core
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"strconv"
 	"time"
+
+	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
+	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
-var db = KVStore{store: SyncMap[string, RedisObject]{}}
+var db = KVStore{store: ds.SyncMap[string, RedisObject]{}}
 
 var INVALID_ARGUMENTS_ERROR = "Invalid argumetns"
 var OK_RESPONSE = "OK"
 var SOMETHING_WENT_WRONG = "Something went wrong"
 
-func (conn *RedisConnection) sendResponse(message string) {
-	fmt.Printf("Sending %q\n", message)
-	n, err := conn.Write([]byte(message))
-	if err != nil {
-		fmt.Printf("An error occurred when writing data back: %s", err.Error())
-		os.Exit(1)
-	}
-	fmt.Printf("wrote %d bytes\n", n)
-}
-
 func pingHandler(args ...string) (string, error) {
-	return ToSimpleString("PONG"), nil
+	return utils.ToSimpleString("PONG"), nil
 }
 
 func echoHandler(args ...string) (string, error) {
 	if len(args) == 0 {
 		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	} else {
-		return ToSimpleString(args[0]), nil
+		return utils.ToBulkString(args[0]), nil
 	}
 }
 
@@ -60,7 +51,7 @@ func setHandler(args ...string) (string, error) {
 			}
 		}
 
-		return ToSimpleString(OK_RESPONSE), nil
+		return utils.ToSimpleString(OK_RESPONSE), nil
 	}
 }
 
@@ -70,9 +61,9 @@ func getHandler(args ...string) (string, error) {
 	}
 	val, ok := db.GetString(args[0])
 	if !ok {
-		return ToNullBulkString(), nil
+		return utils.ToNullBulkString(), nil
 	}
-	return ToBulkString(val), nil
+	return utils.ToBulkString(val), nil
 }
 
 func lpushHandler(args ...string) (string, error) {
@@ -81,7 +72,7 @@ func lpushHandler(args ...string) (string, error) {
 	}
 
 	key, value := args[0], args[1:]
-	reverse(value)
+	utils.Reverse(value)
 	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
@@ -89,7 +80,7 @@ func lpushHandler(args ...string) (string, error) {
 	}
 
 	n := dq.PushFront(value...)
-	return ToRespInt(n), nil
+	return utils.ToRespInt(n), nil
 }
 
 func rpushHandler(args ...string) (string, error) {
@@ -105,7 +96,7 @@ func rpushHandler(args ...string) (string, error) {
 	}
 
 	n := dq.PushBack(value...)
-	return ToRespInt(n), nil
+	return utils.ToRespInt(n), nil
 }
 
 func lrangeHandler(args ...string) (string, error) {
@@ -128,10 +119,10 @@ func lrangeHandler(args ...string) (string, error) {
 	list, ok := db.GetList(key)
 
 	if !ok {
-		return ToArray(make([]string, 0)), nil
+		return utils.ToArray(make([]string, 0)), nil
 	}
 
-	return ToArray(list.LRange(l, r)), nil
+	return utils.ToArray(list.LRange(l, r)), nil
 }
 
 func llenHandler(args ...string) (string, error) {
@@ -142,10 +133,10 @@ func llenHandler(args ...string) (string, error) {
 	key := args[0]
 	list, ok := db.GetList(key)
 	if !ok {
-		return ToRespInt(0), nil
+		return utils.ToRespInt(0), nil
 	}
 
-	return ToRespInt(list.Length()), nil
+	return utils.ToRespInt(list.Length()), nil
 }
 
 func lpopHandler(args ...string) (string, error) {
@@ -156,23 +147,23 @@ func lpopHandler(args ...string) (string, error) {
 	key := args[0]
 	dq, ok := db.GetList(key)
 	if !ok {
-		return ToNullBulkString(), nil
+		return utils.ToNullBulkString(), nil
 	}
 
 	if len(args) > 1 {
 		n_ele_to_rem, _ := strconv.Atoi(args[1])
 		removed_elements, n_removed_elements := dq.TryPopN(n_ele_to_rem)
 		if n_removed_elements == 0 {
-			return ToNullBulkString(), nil
+			return utils.ToNullBulkString(), nil
 		}
-		return ToArray(removed_elements), nil
+		return utils.ToArray(removed_elements), nil
 	}
 
 	removed_element, ok := dq.TryPop()
 	if !ok {
-		return ToNullBulkString(), nil
+		return utils.ToNullBulkString(), nil
 	}
-	return ToBulkString(removed_element), nil
+	return utils.ToBulkString(removed_element), nil
 }
 
 func blpopHandler(args ...string) (string, error) {
@@ -190,10 +181,10 @@ func blpopHandler(args ...string) (string, error) {
 
 	val, ok := dq.PopFront(timeout)
 	if !ok {
-		return ToArray(nil), nil
+		return utils.ToArray(nil), nil
 	}
 
-	return ToArray([]string{key, val}), nil
+	return utils.ToArray([]string{key, val}), nil
 }
 
 func typeHandler(args ...string) (string, error) {
@@ -205,18 +196,18 @@ func typeHandler(args ...string) (string, error) {
 
 	val, ok := db.GetValue(key)
 	if !ok {
-		return ToBulkString("none"), nil
+		return utils.ToSimpleString("none"), nil
 	}
 
-	switch val.Get().kind() {
-	case RString:
-		return ToBulkString("string"), nil
-	case RList:
-		return ToBulkString("list"), nil
-	case RStream:
-		return ToBulkString("stream"), nil
+	switch val.Get().Kind() {
+	case ds.RString:
+		return utils.ToSimpleString("string"), nil
+	case ds.RList:
+		return utils.ToSimpleString("list"), nil
+	case ds.RStream:
+		return utils.ToSimpleString("stream"), nil
 	default:
-		return ToBulkString("none"), nil
+		return utils.ToSimpleString("none"), nil
 	}
 }
 
@@ -234,10 +225,33 @@ func xaddHandler(args ...string) (string, error) {
 		return "", err
 	}
 	stream.AppendEntry(entry)
-	return ToBulkString(entry.ID), nil
+	return utils.ToBulkString(entry.ID.String()), nil
 }
 
-var handlers = map[string]func(...string) (string, error){
+func xrangeHandler(args ...string) (string, error) {
+	if len(args) < 3 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	key := args[0]
+	startID, err := ds.ParseStartStreamID(args[1])
+	if err != nil {
+		return "", err
+	}
+	endID, err := ds.ParseEndStreamID(args[2])
+	if err != nil {
+		return "", err
+	}
+
+	stream, _ := db.LoadOrStoreStream(key)
+	entries, err := stream.RangeScan(startID, endID)
+	if err != nil {
+		return "", err
+	}
+	return utils.ToStreamEntries(entries), nil
+}
+
+var Handlers = map[string]func(...string) (string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
 	"SET":    setHandler,
@@ -250,4 +264,5 @@ var handlers = map[string]func(...string) (string, error){
 	"BLPOP":  blpopHandler,
 	"TYPE":   typeHandler,
 	"XADD":   xaddHandler,
+	"XRANGE": xrangeHandler,
 }

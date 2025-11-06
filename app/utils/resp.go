@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"bufio"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 )
 
 // parseRESPArray parses a RESP array (like *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n)
@@ -93,4 +95,29 @@ func ToArray(elements []string) string {
 
 func ToError(s string) string {
 	return fmt.Sprintf("-ERR %s\r\n", s)
+}
+
+// ToStreamEntries converts a slice of stream entries to a RESP array.
+// Each entry is represented as an array of 2 elements:
+//   - Element 0: The entry ID as a bulk string
+//   - Element 1: An array of field key-value pairs (flattened)
+func ToStreamEntries(entries []*ds.Entry) string {
+	if entries == nil {
+		return "*-1\r\n"
+	}
+
+	result := fmt.Sprintf("*%d\r\n", len(entries))
+	for _, entry := range entries {
+		// Each entry is an array of 2 elements: [ID, fields_array]
+		result += "*2\r\n"
+		// Element 0: ID as bulk string
+		result += ToBulkString(entry.ID.String())
+		// Element 1: Fields as array (key-value pairs flattened)
+		fields := make([]string, 0, len(entry.Fields)*2)
+		for key, value := range entry.Fields {
+			fields = append(fields, key, value)
+		}
+		result += ToArray(fields)
+	}
+	return result
 }
