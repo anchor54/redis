@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
@@ -256,10 +257,10 @@ func xreadHandler(args ...string) (string, error) {
 		return "", errors.New(INVALID_ARGUMENTS_ERROR)
 	}
 
-	var timeout float64 = -1
-	if args[0] == "BLOCK" {
+	var timeout int = -1
+	if strings.ToUpper(args[0]) == "BLOCK" {
 		var err error
-		timeout, err = strconv.ParseFloat(args[1], 64)
+		timeout, err = strconv.Atoi(args[1])
 		if err != nil {
 			return "", err
 		}
@@ -288,14 +289,17 @@ func xreadHandler(args ...string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		startID.Seq++
 		var entries []*ds.Entry
+		startID.Seq++
 		if timeout < 0 {
-			entries, err = streams[i].GetDataFrom(startID)
+			entries, err = streams[i].GetDataFrom(&startID)
 		} else {
-			entries, err = fanInWaiter.GetDataFrom(startID, time.Duration(timeout*float64(time.Second)))
+			entries, err = fanInWaiter.GetDataFrom(&startID, time.Duration(timeout * int(time.Millisecond)))
 		}
 		if err != nil {
+			if err.Error() == "timeout" {
+				return utils.ToArray(nil), nil
+			}
 			return "", err
 		}
 		streamEntries = append(streamEntries, utils.StreamKeyEntries{Key: streamsKeys[i], Entries: entries})

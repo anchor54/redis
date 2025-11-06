@@ -40,14 +40,13 @@ func (s *Stream) GetDataFrom(startID any) ([]*Entry, error) {
 		}
 		// Use the provided startID and increment Seq to get entries after it
 		start = *streamID
-		start.Seq++
 	}
 
 	maxEnd := StreamID{Ms: math.MaxUint64, Seq: math.MaxUint64}
 	entryPtrs, err := s.RangeScan(start, maxEnd)
 	if err != nil {
 		// Start not found, return empty slice
-		return nil, errors.New("start not found")
+		return []*Entry{}, nil
 	}
 
 	return entryPtrs, nil
@@ -143,7 +142,7 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 
 	_, startIndex, ok := startIter.Next()
 	if !ok {
-		return nil, errors.New("start not found")
+		return []*Entry{}, nil
 	}
 
 	var endIndex int
