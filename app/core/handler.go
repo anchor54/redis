@@ -225,7 +225,9 @@ func xaddHandler(args ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	stream.AppendEntry(entry)
+	if err := stream.AppendEntry(entry); err != nil {
+		return "", err
+	}
 	return utils.ToBulkString(entry.ID.String()), nil
 }
 
@@ -235,7 +237,9 @@ func xrangeHandler(args ...string) (string, error) {
 	}
 
 	key := args[0]
-	startID, err := ds.ParseStartStreamID(args[1])
+	stream, _ := db.LoadOrStoreStream(key)
+	lastID := stream.GetLastStreamID()
+	startID, err := ds.ParseStartStreamID(args[1], lastID)
 	if err != nil {
 		return "", err
 	}
@@ -243,8 +247,6 @@ func xrangeHandler(args ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	stream, _ := db.LoadOrStoreStream(key)
 	entries, err := stream.RangeScan(startID, endID)
 	if err != nil {
 		return "", err
@@ -252,60 +254,111 @@ func xrangeHandler(args ...string) (string, error) {
 	return utils.ToStreamEntries(entries), nil
 }
 
+var ErrTimeout = errors.New("timeout")
+
 func xreadHandler(args ...string) (string, error) {
-	if len(args) < 3 || (args[0] == "BLOCK" && len(args) < 5) {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	timeout, streamKeys, startIDs, err := parseXReadArgs(args)
+	if err != nil {
+		return "", err
 	}
 
-	var timeout int = -1
-	if strings.ToUpper(args[0]) == "BLOCK" {
-		var err error
-		timeout, err = strconv.Atoi(args[1])
-		if err != nil {
-			return "", err
+	streams := loadStreams(streamKeys)
+	streamEntries, err := readEntriesFromStreams(streams, streamKeys, startIDs, timeout)
+	if err != nil {
+		if err == ErrTimeout {
+			return utils.ToArray(nil), nil
 		}
-		args = args[2:]
-	}
-
-	args = args[1:]
-	n := len(args)
-	if n%2 != 0 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
-	}
-
-	streamsKeys := args[0 : n/2]
-	startIDs := args[n/2:]
-
-	streams := make([]*ds.Stream, 0)
-	for i := 0; i < n/2; i++ {
-		stream, _ := db.LoadOrStoreStream(streamsKeys[i])
-		streams = append(streams, stream)
-	}
-
-	streamEntries := make([]utils.StreamKeyEntries, 0)
-	fanInWaiter := ds.NewFanInWaiter(streams)
-	for i := 0; i < n/2; i++ {
-		startID, err := ds.ParseStartStreamID(startIDs[i])
-		if err != nil {
-			return "", err
-		}
-		var entries []*ds.Entry
-		startID.Seq++
-		if timeout < 0 {
-			entries, err = streams[i].GetDataFrom(&startID)
-		} else {
-			entries, err = fanInWaiter.GetDataFrom(&startID, time.Duration(timeout * int(time.Millisecond)))
-		}
-		if err != nil {
-			if err.Error() == "timeout" {
-				return utils.ToArray(nil), nil
-			}
-			return "", err
-		}
-		streamEntries = append(streamEntries, utils.StreamKeyEntries{Key: streamsKeys[i], Entries: entries})
+		return "", err
 	}
 
 	return utils.ToStreamEntriesByKey(streamEntries), nil
+}
+
+// parseXReadArgs parses XREAD command arguments and returns timeout, stream keys, and start IDs.
+// Returns timeout as -1 if BLOCK is not specified.
+func parseXReadArgs(args []string) (timeout int, streamKeys []string, startIDs []string, err error) {
+	if len(args) < 3 || (args[0] == "BLOCK" && len(args) < 5) {
+		return -1, nil, nil, errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	timeout = -1
+	argOffset := 0
+
+	// Parse BLOCK option
+	if strings.ToUpper(args[0]) == "BLOCK" {
+		var parseErr error
+		timeout, parseErr = strconv.Atoi(args[1])
+		if parseErr != nil {
+			return -1, nil, nil, parseErr
+		}
+		argOffset = 2
+	}
+
+	// Skip STREAMS keyword and get stream keys and start IDs
+	args = args[argOffset+1:]
+	argCount := len(args)
+	if argCount%2 != 0 {
+		return -1, nil, nil, errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	streamKeys = args[0 : argCount/2]
+	startIDs = args[argCount/2:]
+
+	return timeout, streamKeys, startIDs, nil
+}
+
+// loadStreams loads or creates streams for the given keys.
+func loadStreams(streamKeys []string) []*ds.Stream {
+	streams := make([]*ds.Stream, len(streamKeys))
+	for i, key := range streamKeys {
+		stream, _ := db.LoadOrStoreStream(key)
+		streams[i] = stream
+	}
+	return streams
+}
+
+// readEntriesFromStreams reads entries from multiple streams based on start IDs.
+// Returns entries grouped by stream key, or ErrTimeout if blocking read times out.
+func readEntriesFromStreams(streams []*ds.Stream, streamKeys []string, startIDs []string, timeout int) ([]utils.StreamKeyEntries, error) {
+	streamEntries := make([]utils.StreamKeyEntries, 0, len(streams))
+	fanInWaiter := ds.NewFanInWaiter(streams)
+
+	for i, stream := range streams {
+		entries, err := readEntriesFromStream(stream, startIDs[i], timeout, fanInWaiter)
+		if err != nil {
+			return nil, err
+		}
+		streamEntries = append(streamEntries, utils.StreamKeyEntries{
+			Key:     streamKeys[i],
+			Entries: entries,
+		})
+	}
+
+	return streamEntries, nil
+}
+
+// readEntriesFromStream reads entries from a single stream.
+func readEntriesFromStream(stream *ds.Stream, startIDStr string, timeout int, fanInWaiter *ds.FanInWaiter[ds.Entry, *ds.Stream]) ([]*ds.Entry, error) {
+	lastID := stream.GetLastStreamID()
+	startID, err := ds.ParseStartStreamID(startIDStr, lastID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Increment sequence to get entries after the start ID
+	startID.Seq++
+
+	if timeout < 0 {
+		// Non-blocking read
+		return stream.GetDataFrom(&startID)
+	}
+
+	// Blocking read with timeout
+	entries, err := fanInWaiter.GetDataFrom(&startID, time.Duration(timeout)*time.Millisecond)
+	if err != nil && err.Error() == "timeout" {
+		return nil, ErrTimeout
+	}
+	return entries, err
 }
 
 var Handlers = map[string]func(...string) (string, error){

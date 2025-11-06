@@ -15,10 +15,11 @@ type Entry struct {
 }
 
 type Stream struct {
-	mu      sync.Mutex
-	Index   *radix.Tree[int]
-	Entries *ListPack
-	waiters []WaiterNotifier[Entry]
+	mu           sync.Mutex
+	Index        *radix.Tree[int]
+	Entries      *ListPack
+	waiters      []WaiterNotifier[Entry]
+	lastStreamID *StreamID
 }
 
 // ------------------------------ Implementing FanInWaitData interface ------------------------------
@@ -75,6 +76,18 @@ func NewStream() *Stream {
 	return &Stream{Entries: NewListPack(), Index: radix.New[int]()}
 }
 
+// GetLastStreamID returns the last stream ID, or nil if the stream is empty.
+// Returns a copy of the StreamID to avoid exposing internal state.
+func (s *Stream) GetLastStreamID() *StreamID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastStreamID == nil {
+		return nil
+	}
+	id := *s.lastStreamID
+	return &id
+}
+
 func (s *Stream) Kind() RType {
 	return RStream
 }
@@ -87,19 +100,10 @@ func AsStream(v RValue) (*Stream, bool) {
 }
 
 func (s *Stream) CreateEntry(id string, values ...string) (*Entry, error) {
-	var lastID *StreamID = nil
-	if s.Entries.Len() > 0 {
-		lastBytes, err := s.Entries.Get(-1)
-		if err != nil {
-			return nil, err
-		}
-		lastEntry, err := DecodeEntry(lastBytes)
-		if err != nil {
-			return nil, err
-		}
+	s.mu.Lock()
+	lastID := s.lastStreamID
+	s.mu.Unlock()
 
-		lastID = &lastEntry.ID
-	}
 	entryID, err := GenerateNextID(lastID, id)
 	if err != nil {
 		return nil, err
@@ -115,29 +119,42 @@ func (s *Stream) CreateEntry(id string, values ...string) (*Entry, error) {
 	return &entry, nil
 }
 
-func (s *Stream) AppendEntry(entry *Entry) {
+func (s *Stream) AppendEntry(entry *Entry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Validate that the entry ID is greater than the last ID
+	if s.lastStreamID != nil {
+		if entry.ID.Compare(*s.lastStreamID) <= 0 {
+			return ErrNotGreaterThanTop
+		}
+	}
+
 	s.Entries.Append(EncodeEntry(*entry))
+	id := entry.ID
+	s.lastStreamID = &id
 	for len(s.waiters) > 0 {
 		waiter := s.waiters[0]
 		s.waiters = s.waiters[1:]
 		waiter.Notify(*entry)
 	}
 	s.Index, _, _ = s.Index.Insert(entry.ID.EncodeToBytes(), s.Entries.Len()-1)
+	return nil
 }
 
 func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Check if stream is empty
+	if s.lastStreamID == nil {
+		return []*Entry{}, nil
+	}
+
 	// Check if end is the maximum ID (represents end of stream)
 	isMaxEnd := end.Ms == math.MaxUint64 && end.Seq == math.MaxUint64
 
 	startIter := s.Index.Root().Iterator()
-	if s.Entries.Len() == 0 {
-		return []*Entry{}, nil
-	}
 	startIter.SeekLowerBound(start.EncodeToBytes())
 
 	_, startIndex, ok := startIter.Next()
@@ -147,11 +164,16 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 
 	var endIndex int
 	if isMaxEnd {
-		// For maximum end ID, use the last entry index
-		if s.Entries.Len() == 0 {
-			return []*Entry{}, nil
+		// For maximum end ID, look up the last stream ID in the index
+		endIter := s.Index.Root().Iterator()
+		endIter.SeekLowerBound(s.lastStreamID.EncodeToBytes())
+		_, idx, ok := endIter.Next()
+		if !ok {
+			// Fallback: use last entry index (should not happen if lastStreamID is consistent)
+			endIndex = s.Entries.Len() - 1
+		} else {
+			endIndex = idx
 		}
-		endIndex = s.Entries.Len() - 1
 	} else {
 		// For normal end ID, seek to it
 		endIter := s.Index.Root().Iterator()

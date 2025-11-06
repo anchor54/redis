@@ -103,11 +103,18 @@ func parseID(s string) (ParsedID, error) {
 
 // ParseStartStreamID parses a string in the format "milliseconds-sequence" where
 // the sequence is optional. If sequence is missing, it defaults to 0.
+// Special case: "$" returns the last stream ID if lastID is provided, otherwise returns an error.
 // This is useful for parsing start stream IDs in range queries.
-func ParseStartStreamID(s string) (StreamID, error) {
+func ParseStartStreamID(s string, lastID *StreamID) (StreamID, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return StreamID{}, ErrInvalidFormat
+	}
+	if s == "$" {
+		if lastID == nil {
+			return StreamID{}, errors.New("stream is empty, cannot use $")
+		}
+		return *lastID, nil
 	}
 	if s == "-" {
 		return StreamID{Ms: 0, Seq: 0}, nil
