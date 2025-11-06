@@ -11,9 +11,10 @@ This is a Go implementation of a Redis clone built for the
 This is a fully functional Redis clone implemented in Go that supports:
 - Basic key-value operations with expiration
 - List data structure operations
-- Stream data structure with XADD and XRANGE commands
+- Stream data structure with XADD, XRANGE, and XREAD commands
 - RESP (REdis Serialization Protocol) parsing and response formatting
 - Thread-safe operations using mutexes and concurrent data structures
+- Blocking stream reads with timeout support
 
 ## Implemented Commands
 
@@ -40,6 +41,14 @@ This is a fully functional Redis clone implemented in Go that supports:
 - **XRANGE** - Returns entries from a stream within a range
   - Supports start and end IDs with optional sequence numbers
   - Defaults sequence to 0 for start IDs and max uint64 for end IDs when omitted
+  - Special start ID `-` represents the beginning of the stream
+  - Special end ID `+` represents the end of the stream
+- **XREAD** - Reads entries from one or more streams
+  - Supports reading from multiple streams simultaneously
+  - Non-blocking mode: Returns available entries immediately
+  - Blocking mode: Waits for new entries with optional timeout (BLOCK option)
+  - Returns entries grouped by stream key
+  - Uses FanInWaiter for efficient multi-stream blocking operations
 
 ## Architecture
 
@@ -56,6 +65,7 @@ app/
 │   ├── stream.go       # Stream implementation with radix tree index
 │   ├── stream_id.go    # Stream ID generation and parsing logic
 │   ├── listpack.go     # ListPack data structure for stream entries
+│   ├── fan_in_waiter.go # FanInWaiter for blocking multi-stream reads
 │   ├── queue.go        # Deque implementation for lists
 │   ├── string.go       # String value type
 │   ├── map.go          # Thread-safe map implementation
@@ -76,6 +86,8 @@ app/
 - Uses **ListPack** for efficient entry storage
 - **Radix Tree** index for fast range queries
 - Thread-safe operations with mutex protection
+- Implements `FanInWaitData` interface for blocking reads
+- Waiter notification system for efficient blocking operations
 - Entry encoding/decoding with binary format:
   - 16 bytes for StreamID (8 bytes Ms + 8 bytes Seq)
   - Varint-encoded field count
@@ -94,9 +106,17 @@ app/
 - Full RESP parsing and encoding support
 - Helper functions for all RESP types:
   - Simple strings, bulk strings, integers, arrays, errors
-  - Special helper `ToStreamEntries` for formatting stream entries
+  - Special helper `ToStreamEntries` for formatting stream entries (XRANGE)
+  - Special helper `ToStreamEntriesByKey` for formatting multi-stream entries (XREAD)
 
-#### 5. List Operations (`data-structure/queue.go`)
+#### 5. FanInWaiter (`data-structure/fan_in_waiter.go`)
+- Generic waiter implementation for blocking reads across multiple streams
+- Efficiently waits for data from any subscribed stream
+- Supports timeout-based blocking operations
+- Automatically unsubscribes when data arrives or timeout occurs
+- Used by XREAD command for multi-stream blocking reads
+
+#### 6. List Operations (`data-structure/queue.go`)
 - Deque implementation with front/back operations
 - Blocking pop with timeout support
 - Thread-safe with mutex protection
@@ -124,6 +144,12 @@ app/
 - ListPack provides compact storage for entries
 - Binary encoding for efficient serialization
 
+### Blocking Stream Reads
+- XREAD supports blocking reads with timeout
+- FanInWaiter enables efficient multi-stream blocking
+- Waiter notification system ensures low-latency wake-ups
+- Automatic cleanup of waiters on timeout or data arrival
+
 ## Running the Server
 
 1. Ensure you have `go (1.24+)` installed locally
@@ -150,6 +176,17 @@ Entries are encoded as:
 - Exact: Must be strictly greater than last entry
 
 ### Error Handling
+- Standardized error naming conventions (Err prefix)
 - Invalid ID formats return appropriate errors
 - IDs that are not strictly greater than last entry are rejected
 - `0-0` is explicitly rejected as invalid
+- Improved error messages with proper capitalization
+- Better error handling in connection management
+
+### Code Quality
+- Comprehensive refactoring for improved maintainability
+- Consistent naming conventions throughout
+- Removed debug print statements
+- Improved code documentation and comments
+- Better error handling and connection management
+- Optimized performance with pre-allocated slices
