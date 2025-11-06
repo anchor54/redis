@@ -12,9 +12,10 @@ import (
 
 var db = KVStore{store: ds.SyncMap[string, RedisObject]{}}
 
-var INVALID_ARGUMENTS_ERROR = "Invalid argumetns"
-var OK_RESPONSE = "OK"
-var SOMETHING_WENT_WRONG = "Something went wrong"
+var (
+	ErrInvalidArguments = errors.New("invalid arguments")
+	OKResponse          = "OK"
+)
 
 func pingHandler(args ...string) (string, error) {
 	return utils.ToSimpleString("PONG"), nil
@@ -22,43 +23,41 @@ func pingHandler(args ...string) (string, error) {
 
 func echoHandler(args ...string) (string, error) {
 	if len(args) == 0 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
-	} else {
-		return utils.ToBulkString(args[0]), nil
+		return "", ErrInvalidArguments
 	}
+	return utils.ToBulkString(args[0]), nil
 }
 
 func setHandler(args ...string) (string, error) {
 	if len(args) < 2 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
-	} else {
-		key, value := args[0], args[1]
-		kv_obj := NewStringObject(value)
-		db.Store(key, &kv_obj)
+		return "", ErrInvalidArguments
+	}
 
-		// check if expiry is set
-		if len(args) >= 4 {
-			exp_time, err := strconv.Atoi(args[3])
+	key, value := args[0], args[1]
+	kvObj := NewStringObject(value)
+	db.Store(key, &kvObj)
 
-			if err != nil {
-				return "", err
-			}
-
-			switch exp_type := args[2]; exp_type {
-			case "EX":
-				kv_obj.SetExpiry(time.Duration(exp_time) * time.Second)
-			case "PX":
-				kv_obj.SetExpiry(time.Duration(exp_time) * time.Millisecond)
-			}
+	// Check if expiry is set
+	if len(args) >= 4 {
+		expTime, err := strconv.Atoi(args[3])
+		if err != nil {
+			return "", err
 		}
 
-		return utils.ToSimpleString(OK_RESPONSE), nil
+		switch expType := args[2]; expType {
+		case "EX":
+			kvObj.SetExpiry(time.Duration(expTime) * time.Second)
+		case "PX":
+			kvObj.SetExpiry(time.Duration(expTime) * time.Millisecond)
+		}
 	}
+
+	return utils.ToSimpleString(OKResponse), nil
 }
 
 func getHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 	val, ok := db.GetString(args[0])
 	if !ok {
@@ -69,7 +68,7 @@ func getHandler(args ...string) (string, error) {
 
 func lpushHandler(args ...string) (string, error) {
 	if len(args) < 2 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key, value := args[0], args[1:]
@@ -86,7 +85,7 @@ func lpushHandler(args ...string) (string, error) {
 
 func rpushHandler(args ...string) (string, error) {
 	if len(args) < 2 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key, value := args[0], args[1:]
@@ -102,33 +101,31 @@ func rpushHandler(args ...string) (string, error) {
 
 func lrangeHandler(args ...string) (string, error) {
 	if len(args) < 3 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
-	key := args[0]
-	l, err := strconv.Atoi(args[1])
 
+	key := args[0]
+	left, err := strconv.Atoi(args[1])
 	if err != nil {
 		return "", err
 	}
 
-	r, err := strconv.Atoi(args[2])
-
+	right, err := strconv.Atoi(args[2])
 	if err != nil {
 		return "", err
 	}
 
 	list, ok := db.GetList(key)
-
 	if !ok {
 		return utils.ToArray(make([]string, 0)), nil
 	}
 
-	return utils.ToArray(list.LRange(l, r)), nil
+	return utils.ToArray(list.LRange(left, right)), nil
 }
 
 func llenHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key := args[0]
@@ -142,7 +139,7 @@ func llenHandler(args ...string) (string, error) {
 
 func lpopHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key := args[0]
@@ -152,24 +149,24 @@ func lpopHandler(args ...string) (string, error) {
 	}
 
 	if len(args) > 1 {
-		n_ele_to_rem, _ := strconv.Atoi(args[1])
-		removed_elements, n_removed_elements := dq.TryPopN(n_ele_to_rem)
-		if n_removed_elements == 0 {
+		nElemsToRemove, _ := strconv.Atoi(args[1])
+		removedElements, nRemoved := dq.TryPopN(nElemsToRemove)
+		if nRemoved == 0 {
 			return utils.ToNullBulkString(), nil
 		}
-		return utils.ToArray(removed_elements), nil
+		return utils.ToArray(removedElements), nil
 	}
 
-	removed_element, ok := dq.TryPop()
+	removedElement, ok := dq.TryPop()
 	if !ok {
 		return utils.ToNullBulkString(), nil
 	}
-	return utils.ToBulkString(removed_element), nil
+	return utils.ToBulkString(removedElement), nil
 }
 
 func blpopHandler(args ...string) (string, error) {
 	if len(args) < 2 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key := args[0]
@@ -190,11 +187,10 @@ func blpopHandler(args ...string) (string, error) {
 
 func typeHandler(args ...string) (string, error) {
 	if len(args) < 1 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key := args[0]
-
 	val, ok := db.GetValue(key)
 	if !ok {
 		return utils.ToSimpleString("none"), nil
@@ -214,14 +210,14 @@ func typeHandler(args ...string) (string, error) {
 
 func xaddHandler(args ...string) (string, error) {
 	if len(args) < 4 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
-	key, entry_id := args[0], args[1]
+	key, entryID := args[0], args[1]
 	fields := args[2:]
 
 	stream, _ := db.LoadOrStoreStream(key)
-	entry, err := stream.CreateEntry(entry_id, fields...)
+	entry, err := stream.CreateEntry(entryID, fields...)
 	if err != nil {
 		return "", err
 	}
@@ -233,7 +229,7 @@ func xaddHandler(args ...string) (string, error) {
 
 func xrangeHandler(args ...string) (string, error) {
 	if len(args) < 3 {
-		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+		return "", ErrInvalidArguments
 	}
 
 	key := args[0]
@@ -278,7 +274,7 @@ func xreadHandler(args ...string) (string, error) {
 // Returns timeout as -1 if BLOCK is not specified.
 func parseXReadArgs(args []string) (timeout int, streamKeys []string, startIDs []string, err error) {
 	if len(args) < 3 || (args[0] == "BLOCK" && len(args) < 5) {
-		return -1, nil, nil, errors.New(INVALID_ARGUMENTS_ERROR)
+		return -1, nil, nil, ErrInvalidArguments
 	}
 
 	timeout = -1
@@ -298,7 +294,7 @@ func parseXReadArgs(args []string) (timeout int, streamKeys []string, startIDs [
 	args = args[argOffset+1:]
 	argCount := len(args)
 	if argCount%2 != 0 {
-		return -1, nil, nil, errors.New(INVALID_ARGUMENTS_ERROR)
+		return -1, nil, nil, ErrInvalidArguments
 	}
 
 	streamKeys = args[0 : argCount/2]

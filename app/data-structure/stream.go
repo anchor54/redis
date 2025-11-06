@@ -22,11 +22,13 @@ type Stream struct {
 	lastStreamID *StreamID
 }
 
-// ------------------------------ Implementing FanInWaitData interface ------------------------------
+// HasData returns true if the stream has any entries.
 func (s *Stream) HasData() bool {
 	return s.Entries.Len() > 0
 }
 
+// GetDataFrom returns entries from the stream starting from the given startID.
+// If startID is nil, returns all entries from the beginning.
 func (s *Stream) GetDataFrom(startID any) ([]*Entry, error) {
 	var start StreamID
 	if startID == nil {
@@ -36,10 +38,9 @@ func (s *Stream) GetDataFrom(startID any) ([]*Entry, error) {
 		// Type assert to *StreamID
 		streamID, ok := startID.(*StreamID)
 		if !ok {
-			// Invalid type, return empty slice
 			return nil, errors.New("invalid startID type")
 		}
-		// Use the provided startID and increment Seq to get entries after it
+		// Use the provided startID to get entries after it
 		start = *streamID
 	}
 
@@ -53,12 +54,14 @@ func (s *Stream) GetDataFrom(startID any) ([]*Entry, error) {
 	return entryPtrs, nil
 }
 
+// AddWaiter adds a waiter to be notified when new entries are added.
 func (s *Stream) AddWaiter(waiter WaiterNotifier[Entry]) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.waiters = append(s.waiters, waiter)
 }
 
+// RemoveWaiter removes a waiter from the notification list.
 func (s *Stream) RemoveWaiter(waiter WaiterNotifier[Entry]) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -69,8 +72,6 @@ func (s *Stream) RemoveWaiter(waiter WaiterNotifier[Entry]) {
 		}
 	}
 }
-
-// ------------------------------ Implementation Ends Here ------------------------------
 
 func NewStream() *Stream {
 	return &Stream{Entries: NewListPack(), Index: radix.New[int]()}
@@ -142,6 +143,7 @@ func (s *Stream) AppendEntry(entry *Entry) error {
 	return nil
 }
 
+// RangeScan returns entries in the range [start, end] (inclusive).
 func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -185,7 +187,7 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 		endIndex = idx
 	}
 
-	entries := make([]*Entry, 0)
+	entries := make([]*Entry, 0, endIndex-startIndex+1)
 	for startIndex <= endIndex {
 		entryBytes, err := s.Entries.Get(startIndex)
 		if err != nil {

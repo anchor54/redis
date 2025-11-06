@@ -15,8 +15,8 @@ type RedisObject struct {
 }
 
 func (o *RedisObject) SetExpiry(expiry time.Duration) {
-		t := time.Now().Add(expiry)
-		o.ttl = &t
+	t := time.Now().Add(expiry)
+	o.ttl = &t
 }
 
 func NewStringObject(value string) RedisObject {
