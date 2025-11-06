@@ -266,7 +266,7 @@ func xreadHandler(args ...string) (string, error) {
 	streamsKeys := args[0 : n/2]
 	startIDs := args[n/2:]
 
-	streams := make(map[string][]*ds.Entry)
+	streams := make([]utils.StreamKeyEntries, 0)
 	for i := 0; i < n/2; i++ {
 		stream, _ := db.LoadOrStoreStream(streamsKeys[i])
 		startID, err := ds.ParseStartStreamID(startIDs[i])
@@ -278,7 +278,7 @@ func xreadHandler(args ...string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		streams[streamsKeys[i]] = entries
+		streams = append(streams, utils.StreamKeyEntries{Key: streamsKeys[i], Entries: entries})
 	}
 
 	return utils.ToStreamEntriesByKey(streams), nil

@@ -178,28 +178,35 @@ func ToStreamEntries(entries []*ds.Entry) string {
 	return result
 }
 
-// ToStreamEntriesByKey converts a map of stream keys to their entries into a RESP array.
+// StreamKeyEntries represents a stream key and its associated entries
+type StreamKeyEntries struct {
+	Key     string
+	Entries []*ds.Entry
+}
+
+// ToStreamEntriesByKey converts a slice of stream key-entry pairs into a RESP array.
+// The order of the input slice is preserved in the output.
 // Each element in the top-level array is an array of 2 elements: [key, entries_array].
 // The entries_array is formatted the same way as ToStreamEntries.
 // Format: *N\r\n (*2\r\n$X\r\n<key>\r\n*M\r\n<entries>...) ...
-func ToStreamEntriesByKey(streams map[string][]*ds.Entry) string {
+func ToStreamEntriesByKey(streams []StreamKeyEntries) string {
 	if streams == nil {
 		return "*-1\r\n"
 	}
 
 	// Top-level array with one element per stream key
 	result := fmt.Sprintf("*%d\r\n", len(streams))
-	for key, entries := range streams {
+	for _, stream := range streams {
 		// Each stream is an array of 2 elements: [key, entries_array]
 		result += "*2\r\n"
 		// Element 0: Key as bulk string
-		result += ToBulkString(key)
+		result += ToBulkString(stream.Key)
 		// Element 1: Entries array (formatted like ToStreamEntries)
-		if entries == nil {
+		if stream.Entries == nil {
 			result += "*-1\r\n"
 		} else {
-			result += fmt.Sprintf("*%d\r\n", len(entries))
-			for _, entry := range entries {
+			result += fmt.Sprintf("*%d\r\n", len(stream.Entries))
+			for _, entry := range stream.Entries {
 				// Each entry is an array of 2 elements: [ID, fields_array]
 				result += "*2\r\n"
 				// Element 0: ID as bulk string
