@@ -64,6 +64,12 @@ func (w *FanInWaiter[V, T]) GetDataFrom(startID any, timeout time.Duration) ([]*
 	}
 	w.mu.Unlock()
 
+	if timeout <= 0 {
+		n := <-w.ch
+		w.unsubscribeAll()
+		return []*V{&n}, nil
+	}
+
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
