@@ -3,7 +3,7 @@ package datastructure
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"math"
 	"sync"
 
 	radix "github.com/hashicorp/go-immutable-radix/v2"
@@ -72,24 +72,40 @@ func (s *Stream) AppendEntry(entry *Entry) {
 }
 
 func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
-	fmt.Println("RangeScan", start, end)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	startIter, endIter := s.Index.Root().Iterator(), s.Index.Root().Iterator()
+
+	// Check if end is the maximum ID (represents end of stream)
+	isMaxEnd := end.Ms == math.MaxUint64 && end.Seq == math.MaxUint64
+
+	startIter := s.Index.Root().Iterator()
 	startIter.SeekLowerBound(start.EncodeToBytes())
-	endIter.SeekLowerBound(end.EncodeToBytes())
 
 	_, startIndex, ok := startIter.Next()
 	if !ok {
 		return nil, errors.New("start not found")
 	}
-	_, endIndex, ok := endIter.Next()
-	if !ok {
-		return nil, errors.New("end not found")
+
+	var endIndex int
+	if isMaxEnd {
+		// For maximum end ID, use the last entry index
+		if s.Entries.Len() == 0 {
+			return []*Entry{}, nil
+		}
+		endIndex = s.Entries.Len() - 1
+	} else {
+		// For normal end ID, seek to it
+		endIter := s.Index.Root().Iterator()
+		endIter.SeekLowerBound(end.EncodeToBytes())
+		_, idx, ok := endIter.Next()
+		if !ok {
+			return nil, errors.New("end not found")
+		}
+		endIndex = idx
 	}
 
 	entries := make([]*Entry, 0)
-	for ;startIndex <= endIndex; startIndex++ {
+	for startIndex <= endIndex {
 		entryBytes, err := s.Entries.Get(startIndex)
 		if err != nil {
 			return nil, err
@@ -99,6 +115,7 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 			return nil, err
 		}
 		entries = append(entries, &entry)
+		startIndex++
 	}
 	return entries, nil
 }

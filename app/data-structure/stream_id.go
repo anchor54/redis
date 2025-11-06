@@ -109,6 +109,9 @@ func ParseStartStreamID(s string) (StreamID, error) {
 	if s == "" {
 		return StreamID{}, ErrInvalidFormat
 	}
+	if s == "-" {
+		return StreamID{Ms: 0, Seq: 0}, nil
+	}
 
 	parts := strings.Split(s, "-")
 	if len(parts) == 1 {
@@ -122,10 +125,6 @@ func ParseStartStreamID(s string) (StreamID, error) {
 
 	if len(parts) != 2 {
 		return StreamID{}, ErrInvalidFormat
-	}
-
-	if parts[0] == "" && parts[1] == "" {
-		return StreamID{Ms: 0, Seq: 0}, nil
 	}
 
 	ms, err := strconv.ParseUint(parts[0], 10, 64)
@@ -144,11 +143,15 @@ func ParseStartStreamID(s string) (StreamID, error) {
 // ParseEndStreamID parses a string in the format "milliseconds-sequence" where
 // the sequence is optional. If sequence is missing, it defaults to the maximum
 // sequence number (math.MaxUint64).
+// Special case: "+" returns the maximum possible stream ID (max uint64 for both Ms and Seq).
 // This is useful for parsing end stream IDs in range queries.
 func ParseEndStreamID(s string) (StreamID, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return StreamID{}, ErrInvalidFormat
+	}
+	if s == "+" {
+		return StreamID{Ms: math.MaxUint64, Seq: math.MaxUint64}, nil
 	}
 
 	parts := strings.Split(s, "-")
