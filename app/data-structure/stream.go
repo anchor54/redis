@@ -3,6 +3,7 @@ package datastructure
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"sync"
 
 	radix "github.com/hashicorp/go-immutable-radix/v2"
@@ -71,19 +72,25 @@ func (s *Stream) AppendEntry(entry *Entry) {
 }
 
 func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
+	fmt.Println("RangeScan", start, end)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	startIter, endIter := s.Index.Root().Iterator(), s.Index.Root().Iterator()
 	startIter.SeekLowerBound(start.EncodeToBytes())
 	endIter.SeekLowerBound(end.EncodeToBytes())
 
+	_, startIndex, ok := startIter.Next()
+	if !ok {
+		return nil, errors.New("start not found")
+	}
+	_, endIndex, ok := endIter.Next()
+	if !ok {
+		return nil, errors.New("end not found")
+	}
+
 	entries := make([]*Entry, 0)
-	for startIter != nil && startIter != endIter {
-		_, entry_index, ok := startIter.Next()
-		if !ok {
-			break
-		}
-		entryBytes, err := s.Entries.Get(entry_index)
+	for ;startIndex <= endIndex; startIndex++ {
+		entryBytes, err := s.Entries.Get(startIndex)
 		if err != nil {
 			return nil, err
 		}

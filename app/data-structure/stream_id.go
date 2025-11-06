@@ -124,6 +124,10 @@ func ParseStartStreamID(s string) (StreamID, error) {
 		return StreamID{}, ErrInvalidFormat
 	}
 
+	if parts[0] == "" && parts[1] == "" {
+		return StreamID{Ms: 0, Seq: 0}, nil
+	}
+
 	ms, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
 		return StreamID{}, ErrInvalidFormat

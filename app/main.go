@@ -65,9 +65,16 @@ func handleSession(conn *RedisConnection) {
 
 func (conn *RedisConnection) handleRequest(data string) {
 	// convert received data from byte to string
-	commands, err := utils.ParseRESPArray(data)
+	parsedArray, err := utils.ParseRESPArray(data)
 	if err != nil {
 		fmt.Printf("An error occurred when parsing the command: %s", err.Error())
+		return
+	}
+
+	// Flatten nested arrays to []string for command processing
+	commands := utils.FlattenRESPArray(parsedArray)
+	if len(commands) == 0 {
+		fmt.Printf("Empty command array")
 		return
 	}
 
