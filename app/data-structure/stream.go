@@ -18,7 +18,59 @@ type Stream struct {
 	mu      sync.Mutex
 	Index   *radix.Tree[int]
 	Entries *ListPack
+	waiters []WaiterNotifier[Entry]
 }
+
+// ------------------------------ Implementing FanInWaitData interface ------------------------------
+func (s *Stream) HasData() bool {
+	return s.Entries.Len() > 0
+}
+
+func (s *Stream) GetDataFrom(startID any) ([]*Entry, error) {
+	var start StreamID
+	if startID == nil {
+		// If no startID provided, return all data (start from beginning)
+		start = StreamID{Ms: 0, Seq: 0}
+	} else {
+		// Type assert to *StreamID
+		streamID, ok := startID.(*StreamID)
+		if !ok {
+			// Invalid type, return empty slice
+			return nil, errors.New("invalid startID type")
+		}
+		// Use the provided startID and increment Seq to get entries after it
+		start = *streamID
+		start.Seq++
+	}
+
+	maxEnd := StreamID{Ms: math.MaxUint64, Seq: math.MaxUint64}
+	entryPtrs, err := s.RangeScan(start, maxEnd)
+	if err != nil {
+		// Start not found, return empty slice
+		return nil, errors.New("start not found")
+	}
+
+	return entryPtrs, nil
+}
+
+func (s *Stream) AddWaiter(waiter WaiterNotifier[Entry]) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.waiters = append(s.waiters, waiter)
+}
+
+func (s *Stream) RemoveWaiter(waiter WaiterNotifier[Entry]) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, w := range s.waiters {
+		if w == waiter {
+			s.waiters = append(s.waiters[:i], s.waiters[i+1:]...)
+			break
+		}
+	}
+}
+
+// ------------------------------ Implementation Ends Here ------------------------------
 
 func NewStream() *Stream {
 	return &Stream{Entries: NewListPack(), Index: radix.New[int]()}
@@ -68,6 +120,11 @@ func (s *Stream) AppendEntry(entry *Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Entries.Append(EncodeEntry(*entry))
+	for len(s.waiters) > 0 {
+		waiter := s.waiters[0]
+		s.waiters = s.waiters[1:]
+		waiter.Notify(*entry)
+	}
 	s.Index, _, _ = s.Index.Insert(entry.ID.EncodeToBytes(), s.Entries.Len()-1)
 }
 
@@ -79,6 +136,9 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 	isMaxEnd := end.Ms == math.MaxUint64 && end.Seq == math.MaxUint64
 
 	startIter := s.Index.Root().Iterator()
+	if s.Entries.Len() == 0 {
+		return []*Entry{}, nil
+	}
 	startIter.SeekLowerBound(start.EncodeToBytes())
 
 	_, startIndex, ok := startIter.Next()

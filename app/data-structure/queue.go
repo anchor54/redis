@@ -13,7 +13,7 @@ type Deque[T any] struct {
 }
 
 type Waiter[T any] struct {
-	ch chan T
+	Ch chan T
 }
 
 func NewDeque[T any]() *Deque[T] {
@@ -47,7 +47,7 @@ func (d *Deque[T]) PushFront(items ...T) int {
 		items = items[1:]
 
 		// 3. push item to waiter
-		waiter.ch <- item
+		waiter.Ch <- item
 	}
 
 	// if there are still some items -> add them to the queue
@@ -77,7 +77,7 @@ func (d *Deque[T]) PushBack(items ...T) int {
 		items = items[1:]
 
 		// 3. push item to waiter
-		waiter.ch <- item
+		waiter.Ch <- item
 	}
 
 	// if there are still some items -> add them to the queue
@@ -102,14 +102,14 @@ func (d *Deque[T]) PopFront(timeout float64) (T, bool) {
 	}
 
 	// case 2: queue is empty -> enqueue in waiters
-	w := &Waiter[T]{ch: make(chan T, 1)}
+	w := &Waiter[T]{Ch: make(chan T, 1)}
 	d.waiters = append(d.waiters, w)
 	d.mu.Unlock()
 
 	// case 2.1: indefinite timer
 	if timeout <= 0 {
 		fmt.Println("blocking till we get a item in the queue!")
-		item := <-w.ch // block till we get an item
+		item := <-w.Ch // block till we get an item
 		// producer must have removed the waiter, so no need to remove it
 		return item, true
 	}
@@ -120,7 +120,7 @@ func (d *Deque[T]) PopFront(timeout float64) (T, bool) {
 
 	// 1. wait till either timer completes or producer sends an item
 	select {
-	case item := <-w.ch:
+	case item := <-w.Ch:
 		// producer must have removed the waiter => son no need to remove it
 		return item, true
 
@@ -138,7 +138,7 @@ func (d *Deque[T]) PopFront(timeout float64) (T, bool) {
 		}
 
 		if has_producer_removed {
-			item := <-w.ch // wait for producer to provide the item and the return it
+			item := <-w.Ch // wait for producer to provide the item and the return it
 			return item, true
 		}
 

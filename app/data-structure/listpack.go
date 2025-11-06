@@ -7,9 +7,9 @@ import (
 
 // FOOTER: [4 bytes magic "LPF1"][8 bytes count LE][8 bytes tailEntryStart LE] == 20 bytes total
 var (
-	footerMagic     = []byte{'L', 'P', 'F', '1'}
-	footerTotalSize = 4 + 8 + 8
-	intMarker  byte = 0x01 // payload marker that indicates integer encoding
+	footerMagic          = []byte{'L', 'P', 'F', '1'}
+	footerTotalSize      = 4 + 8 + 8
+	intMarker       byte = 0x01 // payload marker that indicates integer encoding
 )
 
 // ListPack implements a compact contiguous storage with index and footer support.
@@ -241,6 +241,19 @@ func (lp *ListPack) ReverseIter(fn func(i int, payload []byte) error) error {
 		}
 	}
 	return nil
+}
+
+// GetAll returns all entries as a slice of byte slices.
+func (lp *ListPack) GetAll() ([][]byte, error) {
+	result := make([][]byte, 0, len(lp.offsets))
+	err := lp.Iter(func(i int, payload []byte) error {
+		result = append(result, payload)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // Helper: normalize negative indices

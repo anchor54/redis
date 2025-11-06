@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"math"
 	"strconv"
 	"time"
 
@@ -253,8 +252,18 @@ func xrangeHandler(args ...string) (string, error) {
 }
 
 func xreadHandler(args ...string) (string, error) {
-	if len(args) < 3 {
+	if len(args) < 3 || (args[0] == "BLOCK" && len(args) < 5) {
 		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	var timeout float64 = -1
+	if args[0] == "BLOCK" {
+		var err error
+		timeout, err = strconv.ParseFloat(args[1], 64)
+		if err != nil {
+			return "", err
+		}
+		args = args[2:]
 	}
 
 	args = args[1:]
@@ -266,22 +275,33 @@ func xreadHandler(args ...string) (string, error) {
 	streamsKeys := args[0 : n/2]
 	startIDs := args[n/2:]
 
-	streams := make([]utils.StreamKeyEntries, 0)
+	streams := make([]*ds.Stream, 0)
 	for i := 0; i < n/2; i++ {
 		stream, _ := db.LoadOrStoreStream(streamsKeys[i])
+		streams = append(streams, stream)
+	}
+
+	streamEntries := make([]utils.StreamKeyEntries, 0)
+	fanInWaiter := ds.NewFanInWaiter(streams)
+	for i := 0; i < n/2; i++ {
 		startID, err := ds.ParseStartStreamID(startIDs[i])
 		if err != nil {
 			return "", err
 		}
 		startID.Seq++
-		entries, err := stream.RangeScan(startID, ds.StreamID{Ms: math.MaxUint64, Seq: math.MaxUint64})
+		var entries []*ds.Entry
+		if timeout < 0 {
+			entries, err = streams[i].GetDataFrom(startID)
+		} else {
+			entries, err = fanInWaiter.GetDataFrom(startID, time.Duration(timeout*float64(time.Second)))
+		}
 		if err != nil {
 			return "", err
 		}
-		streams = append(streams, utils.StreamKeyEntries{Key: streamsKeys[i], Entries: entries})
+		streamEntries = append(streamEntries, utils.StreamKeyEntries{Key: streamsKeys[i], Entries: entries})
 	}
 
-	return utils.ToStreamEntriesByKey(streams), nil
+	return utils.ToStreamEntriesByKey(streamEntries), nil
 }
 
 var Handlers = map[string]func(...string) (string, error){
