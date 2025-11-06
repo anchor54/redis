@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"time"
 
@@ -251,6 +252,38 @@ func xrangeHandler(args ...string) (string, error) {
 	return utils.ToStreamEntries(entries), nil
 }
 
+func xreadHandler(args ...string) (string, error) {
+	if len(args) < 3 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	args = args[1:]
+	n := len(args)
+	if n%2 != 0 {
+		return "", errors.New(INVALID_ARGUMENTS_ERROR)
+	}
+
+	streamsKeys := args[0 : n/2]
+	startIDs := args[n/2:]
+
+	streams := make(map[string][]*ds.Entry)
+	for i := 0; i < n/2; i++ {
+		stream, _ := db.LoadOrStoreStream(streamsKeys[i])
+		startID, err := ds.ParseStartStreamID(startIDs[i])
+		if err != nil {
+			return "", err
+		}
+		startID.Seq++
+		entries, err := stream.RangeScan(startID, ds.StreamID{Ms: math.MaxUint64, Seq: math.MaxUint64})
+		if err != nil {
+			return "", err
+		}
+		streams[streamsKeys[i]] = entries
+	}
+
+	return utils.ToStreamEntriesByKey(streams), nil
+}
+
 var Handlers = map[string]func(...string) (string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
@@ -265,4 +298,5 @@ var Handlers = map[string]func(...string) (string, error){
 	"TYPE":   typeHandler,
 	"XADD":   xaddHandler,
 	"XRANGE": xrangeHandler,
+	"XREAD":  xreadHandler,
 }
