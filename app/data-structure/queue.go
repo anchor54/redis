@@ -1,8 +1,11 @@
 package datastructure
 
 import (
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
 type Deque[T any] struct {
@@ -34,42 +37,49 @@ func (d *Deque[T]) PushFront(items ...T) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// If there are waiters, satisfy them first
-	for len(d.waiters) > 0 && len(items) > 0 {
+	// Reverse the items
+	utils.Reverse(items)
+
+	// Add all items to the front of the queue first
+	d.data = append(items, d.data...)
+
+	// Record the new length after adding all items
+	newLength := len(d.data)
+
+	// Now satisfy waiters by removing items from the front
+	for len(d.waiters) > 0 && len(d.data) > 0 {
 		waiter := d.waiters[0]
-		item := items[0]
+		item := d.data[0]
 		d.waiters = d.waiters[1:]
-		items = items[1:]
+		d.data = d.data[1:]
 		waiter.Ch <- item
 	}
 
-	// Add remaining items to the front of the queue
-	if len(items) > 0 {
-		d.data = append(items, d.data...)
-	}
-
-	return len(d.data)
+	// Return the length as if all items were added (before removing for waiters)
+	return newLength
 }
 
 func (d *Deque[T]) PushBack(items ...T) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// If there are waiters, satisfy them first
-	for len(d.waiters) > 0 && len(items) > 0 {
+	// Add all items to the back of the queue first
+	d.data = append(d.data, items...)
+
+	// Record the new length after adding all items
+	newLength := len(d.data)
+
+	// Now satisfy waiters by removing items from the front
+	for len(d.waiters) > 0 && len(d.data) > 0 {
 		waiter := d.waiters[0]
-		item := items[0]
+		item := d.data[0]
 		d.waiters = d.waiters[1:]
-		items = items[1:]
+		d.data = d.data[1:]
 		waiter.Ch <- item
 	}
 
-	// Add remaining items to the back of the queue
-	if len(items) > 0 {
-		d.data = append(d.data, items...)
-	}
-
-	return len(d.data)
+	// Return the length as if all items were added (before removing for waiters)
+	return newLength
 }
 
 func (d *Deque[T]) PopFront(timeout float64) (T, bool) {
@@ -144,10 +154,10 @@ func (d *Deque[T]) TryPopN(n int) ([]T, int) {
 		return nil, 0
 	}
 
-	items_to_remove := min(len(d.data), n)
-	item := d.data[:items_to_remove]
-	d.data = d.data[items_to_remove:]
-	return item, items_to_remove
+	itemsToRemove := min(len(d.data), n)
+	item := d.data[:itemsToRemove]
+	d.data = d.data[itemsToRemove:]
+	return item, itemsToRemove
 }
 
 func (d *Deque[T]) Length() int {
@@ -182,4 +192,10 @@ func (d *Deque[T]) LRange(left, right int) []T {
 	}
 
 	return d.data[left : right+1]
+}
+
+func (d *Deque[T]) String() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return fmt.Sprintf("Deque{%v}", d.data)
 }

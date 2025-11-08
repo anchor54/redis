@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 )
 
 // ParseRESPArray parses a RESP array (like *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n)
@@ -166,74 +164,4 @@ func ToArrayFromRESP(respElements []string) string {
 
 func ToError(s string) string {
 	return fmt.Sprintf("-ERR %s\r\n", s)
-}
-
-// ToStreamEntries converts a slice of stream entries to a RESP array.
-// Each entry is represented as an array of 2 elements:
-//   - Element 0: The entry ID as a bulk string
-//   - Element 1: An array of field key-value pairs (flattened)
-func ToStreamEntries(entries []*ds.Entry) string {
-	if entries == nil {
-		return "*-1\r\n"
-	}
-
-	result := fmt.Sprintf("*%d\r\n", len(entries))
-	for _, entry := range entries {
-		// Each entry is an array of 2 elements: [ID, fields_array]
-		result += "*2\r\n"
-		// Element 0: ID as bulk string
-		result += ToBulkString(entry.ID.String())
-		// Element 1: Fields as array (key-value pairs flattened)
-		fields := make([]string, 0, len(entry.Fields)*2)
-		for key, value := range entry.Fields {
-			fields = append(fields, key, value)
-		}
-		result += ToArray(fields)
-	}
-	return result
-}
-
-// StreamKeyEntries represents a stream key and its associated entries
-type StreamKeyEntries struct {
-	Key     string
-	Entries []*ds.Entry
-}
-
-// ToStreamEntriesByKey converts a slice of stream key-entry pairs into a RESP array.
-// The order of the input slice is preserved in the output.
-// Each element in the top-level array is an array of 2 elements: [key, entries_array].
-// The entries_array is formatted the same way as ToStreamEntries.
-// Format: *N\r\n (*2\r\n$X\r\n<key>\r\n*M\r\n<entries>...) ...
-func ToStreamEntriesByKey(streams []StreamKeyEntries) string {
-	if streams == nil {
-		return "*-1\r\n"
-	}
-
-	// Top-level array with one element per stream key
-	result := fmt.Sprintf("*%d\r\n", len(streams))
-	for _, stream := range streams {
-		// Each stream is an array of 2 elements: [key, entries_array]
-		result += "*2\r\n"
-		// Element 0: Key as bulk string
-		result += ToBulkString(stream.Key)
-		// Element 1: Entries array (formatted like ToStreamEntries)
-		if stream.Entries == nil {
-			result += "*-1\r\n"
-		} else {
-			result += fmt.Sprintf("*%d\r\n", len(stream.Entries))
-			for _, entry := range stream.Entries {
-				// Each entry is an array of 2 elements: [ID, fields_array]
-				result += "*2\r\n"
-				// Element 0: ID as bulk string
-				result += ToBulkString(entry.ID.String())
-				// Element 1: Fields as array (key-value pairs flattened)
-				fields := make([]string, 0, len(entry.Fields)*2)
-				for fieldKey, fieldValue := range entry.Fields {
-					fields = append(fields, fieldKey, fieldValue)
-				}
-				result += ToArray(fields)
-			}
-		}
-	}
-	return result
 }

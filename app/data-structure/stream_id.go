@@ -17,9 +17,9 @@ type StreamID struct {
 }
 
 var (
-	ErrInvalidFormat       = errors.New("invalid pattern")
-	ErrNotGreaterThanTop   = errors.New("the ID specified in XADD is equal or smaller than the target stream top item")
-	ErrMustBeGreaterThan00 = errors.New("the ID specified in XADD must be greater than 0-0")
+	ErrInvalidFormat       = errors.New("Invalid pattern")
+	ErrNotGreaterThanTop   = errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
+	ErrMustBeGreaterThan00 = errors.New("The ID specified in XADD must be greater than 0-0")
 )
 
 // String returns the canonical representation "ms-seq"

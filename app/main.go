@@ -10,15 +10,6 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 )
 
-
-func NewRedisConnection(conn net.Conn) *core.RedisConnection {
-	return &core.RedisConnection{
-		Conn: conn,
-		InTransaction: false,
-		QueuedCommands: make([]core.Command, 0),
-	}
-}
-
 func main() {
 	const (
 		host = "0.0.0.0"
@@ -43,7 +34,7 @@ func main() {
 			continue // Continue accepting other connections instead of exiting
 		}
 
-		go handleSession(NewRedisConnection(conn))
+		go handleSession(core.NewRedisConnection(conn))
 	}
 }
 
