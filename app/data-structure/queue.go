@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
 type Deque[T any] struct {
@@ -36,9 +34,6 @@ func AsList[T any](v RValue) (*Deque[T], bool) {
 func (d *Deque[T]) PushFront(items ...T) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
-	// Reverse the items
-	utils.Reverse(items)
 
 	// Add all items to the front of the queue first
 	d.data = append(items, d.data...)

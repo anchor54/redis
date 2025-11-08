@@ -19,7 +19,7 @@ type FanInWaitData[T any] interface {
 	RemoveWaiter(waiter WaiterNotifier[T])
 }
 
-// A waiter waiting for a any of the list to have data
+// FanInWaiter is a waiter waiting for a any of the list to have data
 type FanInWaiter[V any, T FanInWaitData[V]] struct {
 	mu           sync.Mutex
 	subscription []T

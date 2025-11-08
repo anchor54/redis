@@ -2,7 +2,7 @@ package datastructure
 
 import "sync"
 
-// Encapsulated, type-safe concurrent map
+// SyncMap is an encapsulated, type-safe concurrent map
 type SyncMap[K comparable, V any] struct {
 	m sync.Map // map[K]*entry[V]
 }

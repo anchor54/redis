@@ -28,19 +28,19 @@ func (id StreamID) String() string {
 }
 
 // Compare compares two IDs.
-// returns -1 if a < b, 0 if a == b, +1 if a > b
-func (a StreamID) Compare(b StreamID) int {
-	if a.Ms < b.Ms {
+// returns -1 if id < b, 0 if id == b, +1 if id > b
+func (id StreamID) Compare(b StreamID) int {
+	if id.Ms < b.Ms {
 		return -1
 	}
-	if a.Ms > b.Ms {
+	if id.Ms > b.Ms {
 		return 1
 	}
 	// same ms: compare seq
-	if a.Seq < b.Seq {
+	if id.Seq < b.Seq {
 		return -1
 	}
-	if a.Seq > b.Seq {
+	if id.Seq > b.Seq {
 		return 1
 	}
 	return 0
@@ -188,7 +188,7 @@ func ParseEndStreamID(s string) (StreamID, error) {
 	return StreamID{Ms: ms, Seq: seq}, nil
 }
 
-// Now returns the next StreamID we should use for an XADD-like operation.
+// GenerateNextID returns the next StreamID we should use for an XADD-like operation.
 // - last: pointer to last stream ID (nil means empty stream).
 // - requested: input string as passed by client: "*", "ms-*", or "ms-seq".
 // Behavior summary:
@@ -280,7 +280,7 @@ var timeNowMillis = func() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
-// EncodeToKey converts StreamID to a 16-byte key (big-endian).
+// EncodeToBytes converts StreamID to a 16-byte key (big-endian).
 func (id StreamID) EncodeToBytes() []byte {
 	var buf [16]byte
 	binary.BigEndian.PutUint64(buf[0:8], id.Ms)
@@ -289,7 +289,7 @@ func (id StreamID) EncodeToBytes() []byte {
 	return buf[:]
 }
 
-// DecodeFromKey converts a 16-byte key back to StreamID. Expects len == 16.
+// DecodeFromBytes converts a 16-byte key back to StreamID. Expects len == 16.
 func DecodeFromBytes(b []byte) (StreamID, error) {
 	if len(b) != 16 {
 		return StreamID{}, fmt.Errorf("invalid key length: %d", len(b))

@@ -193,7 +193,7 @@ func lpushHandler(conn *RedisConnection, args ...string) (string, error) {
 	}
 
 	key, value := args[0], args[1:]
-	utils.Reverse(value)
+	value = utils.Reverse(value)
 	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
@@ -449,8 +449,7 @@ func incrHandler(conn *RedisConnection, args ...string) (string, error) {
 }
 
 func multiHandler(conn *RedisConnection, args ...string) (string, error) {
-	conn.StartTransaction()
-	return utils.ToSimpleString(OKResponse), nil
+	return conn.StartTransaction()
 }
 
 var Handlers = map[string]func(*RedisConnection, ...string) (string, error){

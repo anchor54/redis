@@ -98,7 +98,7 @@ func (lp *ListPack) Len() int {
 
 // Append appends a raw byte slice (string-like) as an entry.
 func (lp *ListPack) Append(payload []byte) {
-	entry := encodeEntry(payload, false)
+	entry := encodeEntry(payload)
 	start := len(lp.data)
 	lp.data = append(lp.data, entry...)
 	lp.offsets = append(lp.offsets, start)
@@ -162,7 +162,7 @@ func (lp *ListPack) InsertAt(index int, payload []byte) error {
 		return errors.New("index out of range")
 	}
 	// build entry bytes
-	entry := encodeEntry(payload, false)
+	entry := encodeEntry(payload)
 	return lp.insertAtBytes(index, entry)
 }
 
@@ -296,7 +296,7 @@ func (lp *ListPack) insertAtBytes(index int, entry []byte) error {
 }
 
 // encodeEntry encodes a raw payload (string-like) into [uvarint(len)][payload]
-func encodeEntry(payload []byte, _isInt bool) []byte {
+func encodeEntry(payload []byte) []byte {
 	enc := make([]byte, 0, binary.MaxVarintLen64+len(payload))
 	tmp := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(tmp, uint64(len(payload)))
@@ -313,7 +313,7 @@ func encodeIntEntry(v int64) []byte {
 	payload := make([]byte, 1+n)
 	payload[0] = intMarker
 	copy(payload[1:], tmp[:n])
-	return encodeEntry(payload, true)
+	return encodeEntry(payload)
 }
 
 // rebuildOffsets scans data forward to populate offsets slice.
