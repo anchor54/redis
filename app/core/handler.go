@@ -452,6 +452,14 @@ func multiHandler(conn *RedisConnection, args ...string) (string, error) {
 	return conn.StartTransaction()
 }
 
+func execHandler(conn *RedisConnection, args ...string) (string, error) {
+	if !conn.IsInTransaction() {
+		return "", ErrExecWithoutMulti
+	}
+
+	return utils.ToSimpleString(OKResponse), nil
+}
+
 var Handlers = map[string]func(*RedisConnection, ...string) (string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
@@ -469,4 +477,5 @@ var Handlers = map[string]func(*RedisConnection, ...string) (string, error){
 	"XREAD":  xreadHandler,
 	"INCR":   incrHandler,
 	"MULTI":  multiHandler,
+	"EXEC":   execHandler,
 }

@@ -12,6 +12,7 @@ import (
 var (
 	ErrNotInTransaction = errors.New("not in transaction")
 	ErrAlreadyInTransaction = errors.New("already in transaction")
+	ErrExecWithoutMulti = errors.New("EXEC without MULTI")
 )
 
 type RedisConnection struct {
@@ -89,7 +90,7 @@ func (conn *RedisConnection) HandleRequest(data string) {
 	args := commands[1:]
 	fmt.Printf("command: %s, args: %v\n", command, args)
 
-	if conn.IsInTransaction() {
+	if conn.IsInTransaction() && command != "EXEC" {
 		queued, err := conn.EnqueueCommand(CreateCommand(command, args...))
 		if err != nil {
 			conn.sendResponse(utils.ToError(err.Error()))
