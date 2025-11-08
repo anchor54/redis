@@ -6,14 +6,17 @@ import (
 	"io"
 	"net"
 	"os"
-	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/core"
-	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
-type RedisConnection struct {
-	net.Conn
+
+func NewRedisConnection(conn net.Conn) *core.RedisConnection {
+	return &core.RedisConnection{
+		Conn: conn,
+		InTransaction: false,
+		QueuedCommands: make([]core.Command, 0),
+	}
 }
 
 func main() {
@@ -40,11 +43,11 @@ func main() {
 			continue // Continue accepting other connections instead of exiting
 		}
 
-		go handleSession(&RedisConnection{conn})
+		go handleSession(NewRedisConnection(conn))
 	}
 }
 
-func handleSession(conn *RedisConnection) {
+func handleSession(conn *core.RedisConnection) {
 	defer conn.Close()
 
 	buf := make([]byte, 1024)
@@ -59,46 +62,6 @@ func handleSession(conn *RedisConnection) {
 		if n == 0 {
 			return
 		}
-		conn.handleRequest(string(buf[:n]))
-	}
-}
-
-func (conn *RedisConnection) handleRequest(data string) {
-	parsedArray, err := utils.ParseRESPArray(data)
-	if err != nil {
-		fmt.Printf("Error parsing command: %s\n", err)
-		conn.sendResponse(utils.ToError("invalid command format"))
-		return
-	}
-
-	// Flatten nested arrays to []string for command processing
-	commands := utils.FlattenRESPArray(parsedArray)
-	if len(commands) == 0 {
-		conn.sendResponse(utils.ToError("empty command"))
-		return
-	}
-
-	command := strings.ToUpper(strings.TrimSpace(commands[0]))
-	args := commands[1:]
-
-	handler, ok := core.Handlers[command]
-	if !ok {
-		conn.sendResponse(utils.ToError(fmt.Sprintf("unknown command: %s", command)))
-		return
-	}
-
-	resp, err := handler(args...)
-	if err != nil {
-		conn.sendResponse(utils.ToError(err.Error()))
-		return
-	}
-
-	conn.sendResponse(resp)
-}
-
-func (conn *RedisConnection) sendResponse(message string) {
-	_, err := conn.Write([]byte(message))
-	if err != nil {
-		fmt.Printf("Error writing response: %s\n", err)
+		conn.HandleRequest(string(buf[:n]))
 	}
 }

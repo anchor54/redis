@@ -357,6 +357,19 @@ func readEntriesFromStream(stream *ds.Stream, startIDStr string, timeout int, fa
 	return entries, err
 }
 
+func incrHandler(args ...string) (string, error) {
+	if len(args) < 1 {
+		return "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	count, err := db.IncrementString(key)
+	if err != nil {
+		return "", err
+	}
+	return utils.ToRespInt(count), nil
+}
+
 var Handlers = map[string]func(...string) (string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
@@ -372,4 +385,5 @@ var Handlers = map[string]func(...string) (string, error){
 	"XADD":   xaddHandler,
 	"XRANGE": xrangeHandler,
 	"XREAD":  xreadHandler,
+	"INCR":   incrHandler,
 }

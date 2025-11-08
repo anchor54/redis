@@ -1,6 +1,8 @@
 package core
 
 import (
+	"errors"
+	"strconv"
 	"time"
 
 	datastructure "github.com/codecrafters-io/redis-starter-go/app/data-structure"
@@ -77,4 +79,53 @@ func (store *KVStore) GetStream(key string) (*datastructure.Stream, bool) {
 		return nil, false
 	}
 	return datastructure.AsStream(val.Get())
+}
+
+// IncrementString atomically increments a string value by 1.
+// Returns the new value after increment, or an error if the value is not an integer.
+// If the key doesn't exist, it's treated as "0" and incremented to "1".
+func (store *KVStore) IncrementString(key string) (int, error) {
+	var newCount int
+	var err error
+
+	store.store.Update(key, func(old *RedisObject) *RedisObject {
+		// Handle nil or expired keys
+		if old == nil {
+			newCount = 1
+			kvObj := NewStringObject("1")
+			return &kvObj
+		}
+
+		// Check if expired
+		if old.ttl != nil && old.ttl.Before(time.Now()) {
+			newCount = 1
+			kvObj := NewStringObject("1")
+			return &kvObj
+		}
+
+		// Get string value
+		countStr, ok := datastructure.AsString(old.Get())
+		if !ok {
+			err = errors.New("value is not an integer or out of range")
+			return old // Return old value unchanged on error
+		}
+
+		// Parse and increment
+		count, parseErr := strconv.Atoi(countStr)
+		if parseErr != nil {
+			err = errors.New("value is not an integer or out of range")
+			return old // Return old value unchanged on error
+		}
+
+		newCount = count + 1
+		countStr = strconv.Itoa(newCount)
+		kvObj := NewStringObject(countStr)
+		// Preserve TTL if it exists
+		if old.ttl != nil {
+			kvObj.ttl = old.ttl
+		}
+		return &kvObj
+	})
+
+	return newCount, err
 }
