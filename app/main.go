@@ -94,7 +94,7 @@ func handleRequest(conn *core.RedisConnection, data string) {
 	args := commands[1:]
 	fmt.Printf("command: %s, args: %v\n", command, args)
 
-	if conn.IsInTransaction() && command != "EXEC" {
+	if conn.IsInTransaction() && command != "EXEC" && command != "DISCARD" {
 		queued, err := conn.EnqueueCommand(core.CreateCommand(command, args...))
 		if err != nil {
 			conn.SendResponse(utils.ToError(err.Error()))
@@ -120,8 +120,12 @@ func handleRequest(conn *core.RedisConnection, data string) {
 
 	// handle DISCARD command
 	if command == "DISCARD" {
-		conn.DiscardTransaction()
-		conn.SendResponse(utils.ToSimpleString("OK"))
+		response, err := conn.DiscardTransaction()
+		if err != nil {
+			conn.SendResponse(utils.ToError(err.Error()))
+			return
+		}
+		conn.SendResponse(response)
 		return
 	}
 
