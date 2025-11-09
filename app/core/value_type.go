@@ -2,15 +2,16 @@ package core
 
 import (
 	"time"
-	"github.com/codecrafters-io/redis-starter-go/app/data-structure"
+
+	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 )
 
 type RedisValue interface {
-	string | datastructure.Deque[string]
+	string | *ds.Deque | *ds.Stream
 }
 
 type RedisObject struct {
-	value datastructure.RValue
+	value ds.RValue
 	ttl   *time.Time
 }
 
@@ -20,13 +21,13 @@ func (o *RedisObject) SetExpiry(expiry time.Duration) {
 }
 
 func NewStringObject(value string) RedisObject {
-	return RedisObject{value: datastructure.NewStringValue(value), ttl: nil}
+	return RedisObject{value: ds.NewStringValue(value), ttl: nil}
 }
 
-func NewListObject(value *datastructure.Deque[string]) RedisObject {
+func NewListObject(value *ds.Deque) RedisObject {
 	return RedisObject{value: value, ttl: nil}
 }
 
-func (o *RedisObject) Get() datastructure.RValue {
+func (o *RedisObject) Get() ds.RValue {
 	return o.value
 }

@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"time"
 
-	datastructure "github.com/codecrafters-io/redis-starter-go/app/data-structure"
+	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 )
 
 type KVStore struct {
-	store datastructure.SyncMap[string, RedisObject]
+	store ds.SyncMap[string, RedisObject]
 }
 
 func (store *KVStore) Delete(key string) {
@@ -37,48 +37,48 @@ func (store *KVStore) GetString(key string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return datastructure.AsString(val.Get())
+	return ds.AsString(val.Get())
 }
 
-func (store *KVStore) GetList(key string) (*datastructure.Deque[string], bool) {
+func (store *KVStore) GetList(key string) (*ds.Deque, bool) {
 	val, ok := store.GetValue(key)
 	if !ok {
 		return nil, false
 	}
-	return datastructure.AsList[string](val.Get())
+	return ds.AsList(val.Get())
 }
 
-func (store *KVStore) StoreList(key string, value *datastructure.Deque[string]) {
+func (store *KVStore) StoreList(key string, value *ds.Deque) {
 	kvObj := NewListObject(value)
 	store.store.Store(key, &kvObj)
 }
 
-func (store *KVStore) LoadOrStoreList(key string) (*datastructure.Deque[string], bool) {
-	kvObj := NewListObject(datastructure.NewDeque[string]())
+func (store *KVStore) LoadOrStoreList(key string) (*ds.Deque, bool) {
+	kvObj := NewListObject(ds.NewDeque())
 	val, loaded := store.store.LoadOrStore(key, &kvObj)
-	list, ok := datastructure.AsList[string](val.Get())
+	list, ok := ds.AsList(val.Get())
 	if !ok {
 		return nil, false
 	}
 	return list, loaded
 }
 
-func (store *KVStore) LoadOrStoreStream(key string) (*datastructure.Stream, bool) {
-	kvObj := RedisObject{value: datastructure.NewStream(), ttl: nil}
+func (store *KVStore) LoadOrStoreStream(key string) (*ds.Stream, bool) {
+	kvObj := RedisObject{value: ds.NewStream(), ttl: nil}
 	val, loaded := store.store.LoadOrStore(key, &kvObj)
-	stream, ok := datastructure.AsStream(val.Get())
+	stream, ok := ds.AsStream(val.Get())
 	if !ok {
 		return nil, false
 	}
 	return stream, loaded
 }
 
-func (store *KVStore) GetStream(key string) (*datastructure.Stream, bool) {
+func (store *KVStore) GetStream(key string) (*ds.Stream, bool) {
 	val, ok := store.GetValue(key)
 	if !ok {
 		return nil, false
 	}
-	return datastructure.AsStream(val.Get())
+	return ds.AsStream(val.Get())
 }
 
 // IncrementString atomically increments a string value by 1.
@@ -104,7 +104,7 @@ func (store *KVStore) IncrementString(key string) (int, error) {
 		}
 
 		// Get string value
-		countStr, ok := datastructure.AsString(old.Get())
+		countStr, ok := ds.AsString(old.Get())
 		if !ok {
 			err = errors.New("value is not an integer or out of range")
 			return old // Return old value unchanged on error

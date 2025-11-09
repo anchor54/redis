@@ -112,7 +112,7 @@ func ParseStartStreamID(s string, lastID *StreamID) (StreamID, error) {
 	}
 	if s == "$" {
 		if lastID == nil {
-			return StreamID{}, errors.New("stream is empty, cannot use $")
+			return StreamID{}, nil
 		}
 		return *lastID, nil
 	}

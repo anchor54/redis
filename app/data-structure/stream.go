@@ -3,8 +3,8 @@ package datastructure
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
-	"sync"
 
 	radix "github.com/hashicorp/go-immutable-radix/v2"
 )
@@ -15,62 +15,29 @@ type Entry struct {
 }
 
 type Stream struct {
-	mu           sync.Mutex
 	Index        *radix.Tree[int]
 	Entries      *ListPack
-	waiters      []WaiterNotifier[Entry]
 	lastStreamID *StreamID
 }
 
-// HasData returns true if the stream has any entries.
-func (s *Stream) HasData() bool {
-	return s.Entries.Len() > 0
+func (e *Entry) String() string {
+	return fmt.Sprintf("ID: %s, Fields: %v", e.ID.String(), e.Fields)
 }
 
-// GetDataFrom returns entries from the stream starting from the given startID.
-// If startID is nil, returns all entries from the beginning.
-func (s *Stream) GetDataFrom(startID any) ([]*Entry, error) {
-	var start StreamID
-	if startID == nil {
-		// If no startID provided, return all data (start from beginning)
-		start = StreamID{Ms: 0, Seq: 0}
-	} else {
-		// Type assert to *StreamID
-		streamID, ok := startID.(*StreamID)
-		if !ok {
-			return nil, errors.New("invalid startID type")
+func (s *Stream) String() string {
+	entries := make([]string, 0, s.Entries.Len())
+	for i := 0; i < s.Entries.Len(); i++ {
+		entryBytes, err := s.Entries.Get(i)
+		if err != nil {
+			return fmt.Sprintf("Error getting entry: %v", err)
 		}
-		// Use the provided startID to get entries after it
-		start = *streamID
-	}
-
-	maxEnd := StreamID{Ms: math.MaxUint64, Seq: math.MaxUint64}
-	entryPtrs, err := s.RangeScan(start, maxEnd)
-	if err != nil {
-		// Start not found, return empty slice
-		return []*Entry{}, nil
-	}
-
-	return entryPtrs, nil
-}
-
-// AddWaiter adds a waiter to be notified when new entries are added.
-func (s *Stream) AddWaiter(waiter WaiterNotifier[Entry]) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.waiters = append(s.waiters, waiter)
-}
-
-// RemoveWaiter removes a waiter from the notification list.
-func (s *Stream) RemoveWaiter(waiter WaiterNotifier[Entry]) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, w := range s.waiters {
-		if w == waiter {
-			s.waiters = append(s.waiters[:i], s.waiters[i+1:]...)
-			break
+		entry, err := DecodeEntry(entryBytes)
+		if err != nil {
+			return fmt.Sprintf("Error decoding entry: %v", err)
 		}
+		entries = append(entries, entry.String())
 	}
+	return fmt.Sprintf("lastStreamID: %s, Entries: %v", s.lastStreamID, entries)
 }
 
 func NewStream() *Stream {
@@ -80,13 +47,7 @@ func NewStream() *Stream {
 // GetLastStreamID returns the last stream ID, or nil if the stream is empty.
 // Returns a copy of the StreamID to avoid exposing internal state.
 func (s *Stream) GetLastStreamID() *StreamID {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.lastStreamID == nil {
-		return nil
-	}
-	id := *s.lastStreamID
-	return &id
+	return s.lastStreamID
 }
 
 func (s *Stream) Kind() RType {
@@ -101,9 +62,7 @@ func AsStream(v RValue) (*Stream, bool) {
 }
 
 func (s *Stream) CreateEntry(id string, values ...string) (*Entry, error) {
-	s.mu.Lock()
 	lastID := s.lastStreamID
-	s.mu.Unlock()
 
 	entryID, err := GenerateNextID(lastID, id)
 	if err != nil {
@@ -121,9 +80,6 @@ func (s *Stream) CreateEntry(id string, values ...string) (*Entry, error) {
 }
 
 func (s *Stream) AppendEntry(entry *Entry) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Validate that the entry ID is greater than the last ID
 	if s.lastStreamID != nil {
 		if entry.ID.Compare(*s.lastStreamID) <= 0 {
@@ -134,20 +90,13 @@ func (s *Stream) AppendEntry(entry *Entry) error {
 	s.Entries.Append(EncodeEntry(*entry))
 	id := entry.ID
 	s.lastStreamID = &id
-	for len(s.waiters) > 0 {
-		waiter := s.waiters[0]
-		s.waiters = s.waiters[1:]
-		waiter.Notify(*entry)
-	}
 	s.Index, _, _ = s.Index.Insert(entry.ID.EncodeToBytes(), s.Entries.Len()-1)
 	return nil
 }
 
 // RangeScan returns entries in the range [start, end] (inclusive).
 func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	fmt.Printf("range scanning stream from %s to %s\n", start.String(), end.String())
 	// Check if stream is empty
 	if s.lastStreamID == nil {
 		return []*Entry{}, nil
@@ -163,6 +112,7 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 	if !ok {
 		return []*Entry{}, nil
 	}
+	fmt.Printf("start index: %d\n", startIndex)
 
 	var endIndex int
 	if isMaxEnd {
@@ -186,6 +136,8 @@ func (s *Stream) RangeScan(start, end StreamID) ([]*Entry, error) {
 		}
 		endIndex = idx
 	}
+
+	fmt.Printf("end index: %d\n", endIndex)
 
 	entries := make([]*Entry, 0, endIndex-startIndex+1)
 	for startIndex <= endIndex {

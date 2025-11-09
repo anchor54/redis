@@ -147,6 +147,18 @@ func ToArray(elements []string) string {
 	return result
 }
 
+func ToSimpleRespArray(elements []string) string {
+	if elements == nil {
+		return "*-1\r\n"
+	}
+
+	result := fmt.Sprintf("*%d\r\n", len(elements))
+	for _, e := range elements {
+		result += e
+	}
+	return result
+}
+
 // ToArrayFromRESP converts a slice of RESP-formatted strings to a RESP Array.
 // Each element in the slice is already a complete RESP value (bulk string, integer, etc.)
 // and is included directly in the array without additional wrapping.
