@@ -351,23 +351,27 @@ func blpopHandler(cmd *Command) (int, []string, string, error) {
 		return -1, []string{}, "", utils.ErrInvalidArguments
 	}
 
-	key := args[0]
-	timeout, _ := strconv.ParseFloat(args[1], 32)
-	dq, _ := db.LoadOrStoreList(key)
+	keys := args[:len(args)-1]
+	timeout, _ := strconv.ParseFloat(args[len(args)-1], 32)
 
-	if dq == nil {
-		return -1, []string{}, "", utils.ErrFailedToLoadOrStoreList
-	}
+	for _, key := range keys {
+		dq, _ := db.LoadOrStoreList(key)
 
-	val, ok := dq.TryPop()
-	if !ok {
-		if timeout >= 0 {
-			return int(timeout * 1000), []string{key}, utils.ToNullBulkString(), nil
+		if dq == nil {
+			return -1, []string{}, "", utils.ErrFailedToLoadOrStoreList
 		}
-		return -1, []string{}, utils.ToArray(nil), nil
+
+		val, ok := dq.TryPop()
+		if ok {
+			return -1, []string{}, utils.ToArray([]string{key, val}), nil
+		}
 	}
 
-	return -1, []string{}, utils.ToArray([]string{val}), nil
+	if timeout >= 0 {
+		return int(timeout * 1000), keys, utils.ToNullBulkString(), nil
+	}
+
+	return -1, []string{}, utils.ToArray(nil), nil
 }
 
 func typeHandler(cmd *Command) (int, []string, string, error) {

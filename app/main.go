@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
@@ -233,6 +234,18 @@ func handleResponse(cmd *core.Command) {
 		for _, key := range keys {
 			blockingCommands[key] = append(blockingCommands[key], waitingCommand)
 		}
+
+		// Start a timer to remove the command after timeout expires
+		if timeout > 0 {
+			go func(wc *WaitingCommand) {
+				time.Sleep(time.Duration(timeout) * time.Millisecond)
+				for _, key := range wc.waitingKeys {
+					blockingCommands[key] = removeWaitingCommand(blockingCommands[key], wc)
+				}
+				wc.command.Response <- utils.ToArray(nil)
+			}(waitingCommand)
+		}
+
 		return
 	}
 
