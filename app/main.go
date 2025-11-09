@@ -283,7 +283,7 @@ func handleTransaction(trans *Transaction) {
 		}
 
 		// if the command had a response, send it to the client
-		result[i] = utils.ToBulkString(resp)
+		result[i] = resp
 	}
 	// if the command had set a list of keys, we need to check if any of them blocked another command in waiting state
 	unblockCommandsWaitingForKey(unblockedKeys)
