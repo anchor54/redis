@@ -282,7 +282,7 @@ func handleTransaction(trans *Transaction) {
 
 		// if the command had an error, send it to the client
 		if err != nil {
-			result = append(result, utils.ToError(err.Error()))
+			result[i] = utils.ToError(err.Error())
 			continue
 		}
 
