@@ -9,6 +9,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
+	err "github.com/codecrafters-io/redis-starter-go/app/error"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -254,7 +255,7 @@ func lpushHandler(cmd *Command) (int, []string, string, error) {
 	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
-		return -1, []string{}, "", utils.ErrFailedToLoadOrStoreList
+		return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 	}
 
 	n := dq.PushFront(value...)
@@ -271,7 +272,7 @@ func rpushHandler(cmd *Command) (int, []string, string, error) {
 	dq, _ := db.LoadOrStoreList(key)
 
 	if dq == nil {
-		return -1, []string{}, "", utils.ErrFailedToLoadOrStoreList
+		return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 	}
 
 	n := dq.PushBack(value...)
@@ -349,7 +350,7 @@ func lpopHandler(cmd *Command) (int, []string, string, error) {
 func blpopHandler(cmd *Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 2 {
-		return -1, []string{}, "", utils.ErrInvalidArguments
+		return -1, []string{}, "", err.ErrInvalidArguments
 	}
 
 	keys := args[:len(args)-1]
@@ -359,7 +360,7 @@ func blpopHandler(cmd *Command) (int, []string, string, error) {
 		dq, _ := db.LoadOrStoreList(key)
 
 		if dq == nil {
-			return -1, []string{}, "", utils.ErrFailedToLoadOrStoreList
+			return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 		}
 
 		val, ok := dq.TryPop()
@@ -510,7 +511,7 @@ func infoHandler(cmd *Command) (int, []string, string, error) {
 	if len(args) > 0 {
 		key := args[0]
 		if strings.ToLower(key) == "replication" {
-			return -1, []string{}, utils.ToBulkString(fmt.Sprintf("role:%s", config.Role)), nil
+			return -1, []string{}, utils.ToBulkString(config.String()), nil
 		}
 	}
 	return -1, []string{}, utils.ToNullBulkString(), nil

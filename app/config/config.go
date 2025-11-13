@@ -1,11 +1,18 @@
 package config
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+
+	"github.com/codecrafters-io/redis-starter-go/app/utils"
+)
 
 type Config struct {
-	Host	string
-	Port	int
-	Role	ServerRole
+	Host			string
+	Port			int
+	Role			ServerRole
+	ReplicationID 	string
+	Offset			int
 }
 
 var (
@@ -32,6 +39,9 @@ func Init(opts *Config) {
 		if opts.Role != "" {
 			instance.Role = opts.Role
 		}
+
+		instance.ReplicationID = utils.GenerateUniqueID()
+		instance.Offset = 0
 	})
 }
 
@@ -40,4 +50,13 @@ func GetInstance() *Config {
 		Init(&Config{})
 	}
 	return instance
+}
+
+func (config *Config) String() string {
+	return fmt.Sprintf(
+		"role:%s\nmaster_replid:%s\nmaster_repl_offset:%d",
+		config.Role,
+		config.ReplicationID,
+		config.Offset,
+	)
 }

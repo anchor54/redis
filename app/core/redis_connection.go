@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 
+	err "github.com/codecrafters-io/redis-starter-go/app/error"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -40,7 +41,7 @@ func (conn *RedisConnection) EnqueueCommand(command Command) (bool, error) {
 		conn.queuedCommands = append(conn.queuedCommands, command)
 		return true, nil
 	}
-	return false, utils.ErrNotInTransaction
+	return false, err.ErrNotInTransaction
 }
 
 func (conn *RedisConnection) DequeueCommand() (Command, bool) {
@@ -75,7 +76,7 @@ func (conn *RedisConnection) QueuedCommands() []Command {
 
 func (conn *RedisConnection) StartTransaction() (string, error) {
 	if conn.IsInTransaction() {
-		return "", utils.ErrAlreadyInTransaction
+		return "", err.ErrAlreadyInTransaction
 	}
 	conn.inTransaction = true
 	return utils.ToSimpleString(OKResponse), nil
@@ -87,7 +88,7 @@ func (conn *RedisConnection) EndTransaction() {
 
 func (conn *RedisConnection) DiscardTransaction() (string, error) {
 	if !conn.IsInTransaction() {
-		return "", utils.ErrDiscardWithoutMulti
+		return "", err.ErrDiscardWithoutMulti
 	}
 	conn.inTransaction = false
 	conn.queuedCommands = make([]Command, 0)

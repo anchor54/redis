@@ -12,6 +12,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	err "github.com/codecrafters-io/redis-starter-go/app/error"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -93,9 +94,9 @@ func handleSession(conn *core.RedisConnection) {
 }
 
 func handleRequest(conn *core.RedisConnection, data string) {
-	parsedArray, err := utils.ParseRESPArray(data)
-	if err != nil {
-		fmt.Printf("Error parsing command: %s\n", err)
+	parsedArray, e := utils.ParseRESPArray(data)
+	if e != nil {
+		fmt.Printf("Error parsing command: %s\n", e)
 		conn.SendResponse(utils.ToError("invalid command format"))
 		return
 	}
@@ -149,7 +150,7 @@ func handleRequest(conn *core.RedisConnection, data string) {
 	// handle EXEC command
 	if command == "EXEC" {
 		if !conn.IsInTransaction() {
-			conn.SendResponse(utils.ToError(utils.ErrExecWithoutMulti.Error()))
+			conn.SendResponse(utils.ToError(err.ErrExecWithoutMulti.Error()))
 			return
 		}
 		conn.EndTransaction()
