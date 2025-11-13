@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -28,10 +29,10 @@ type WaitingCommand struct {
 }
 
 func main() {
-	const (
-		host = "0.0.0.0"
-		port = 6379
-	)
+	const host = "0.0.0.0"
+	var port int
+	flag.IntVar(&port, "port", 6379, "The port to run the server on.")
+	flag.Parse()
 
 	localAddress := fmt.Sprintf("%s:%d", host, port)
 	go executeCommands()
