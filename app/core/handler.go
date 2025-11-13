@@ -503,6 +503,17 @@ func incrHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToRespInt(count), nil
 }
 
+func infoHandler(cmd *Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) > 0 {
+		key := args[0]
+		if strings.ToLower(key) == "replication" {
+			return -1, []string{}, utils.ToBulkString("role:master"), nil
+		}
+	}
+	return -1, []string{}, utils.ToNullBulkString(), nil
+}
+
 var Handlers = map[string]func(*Command) (int, []string, string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
@@ -519,4 +530,5 @@ var Handlers = map[string]func(*Command) (int, []string, string, error){
 	"XRANGE": xrangeHandler,
 	"XREAD":  xreadHandler,
 	"INCR":   incrHandler,
+	"INFO": infoHandler,
 }
