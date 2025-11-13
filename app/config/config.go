@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
@@ -11,8 +12,16 @@ type Config struct {
 	Host			string
 	Port			int
 	Role			ServerRole
+	MasterHost		string
+	MasterPort		string
 	ReplicationID 	string
 	Offset			int
+}
+
+type ConfigOptions struct {
+	Port			int
+	Role			ServerRole
+	MasterAddress	string
 }
 
 var (
@@ -20,16 +29,13 @@ var (
 	once		sync.Once
 )
 
-func Init(opts *Config) {
+func Init(opts *ConfigOptions) {
 	once.Do(func ()  {
 		instance = &Config{
 			Host: "0.0.0.0",
 			Port: 6379,
 			Role: Master,
-		}
-
-		if opts.Host != "" {
-			instance.Host = opts.Host
+			ReplicationID: utils.GenerateUniqueID(),
 		}
 
 		if opts.Port != 0 {
@@ -40,14 +46,17 @@ func Init(opts *Config) {
 			instance.Role = opts.Role
 		}
 
-		instance.ReplicationID = utils.GenerateUniqueID()
-		instance.Offset = 0
+		if opts.MasterAddress != "" {
+			parts := strings.Split(opts.MasterAddress, " ")
+			instance.MasterHost, instance.MasterPort = parts[0], parts[1]
+		}
+
 	})
 }
 
 func GetInstance() *Config {
 	if instance == nil {
-		Init(&Config{})
+		Init(&ConfigOptions{})
 	}
 	return instance
 }

@@ -16,9 +16,12 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
-var cmdQueue = make(chan *core.Command, 1000)
-var transactions = make(chan *Transaction, 1000)
-var blockingCommands = make(map[string][]*WaitingCommand)
+var (
+	cmdQueue         = make(chan *core.Command, 1000)
+	transactions     = make(chan *Transaction, 1000)
+	blockingCommands = make(map[string][]*WaitingCommand)
+	serverConfig     *config.Config
+)
 
 type Transaction struct {
 	commands []core.Command
@@ -30,30 +33,78 @@ type WaitingCommand struct {
 	waitingKeys []string
 }
 
-func parseFlags() (int, config.ServerRole) {
+func parseFlags() (int, config.ServerRole, string) {
 	var port int
-	var replicaof string
+	var masterAddress string
 
 	flag.IntVar(&port, "port", 6379, "The port to run the server on.")
-	flag.StringVar(&replicaof, "replicaof", "", "Master address in format 'host port'")
+	flag.StringVar(&masterAddress, "replicaof", "", "Master address in format 'host port'")
 	flag.Parse()
 
 	role := config.Master
-	if replicaof != "" {
+	if masterAddress != "" {
 		role = config.Slave
 	}
 
-	return port, role
+	return port, role, masterAddress
 }
 
 func main() {
-	port, role := parseFlags()
-	config.Init(&config.Config{Port: port, Role: role})
-	config := config.GetInstance()
+	port, role, masterAddress := parseFlags()
+	config.Init(&config.ConfigOptions{Port: port, Role: role, MasterAddress: masterAddress})
+	serverConfig = config.GetInstance()
 
-	localAddress := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	if serverConfig.Role == config.Master {
+		startMaster()
+	} else {
+		startReplica()
+	}
+}
+
+func startReplica() {
+	// Start the replica's own server to accept client connections first
 	go executeCommands()
 
+	localAddress := fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port)
+	listener, err := net.Listen("tcp", localAddress)
+	if err != nil {
+		fmt.Printf("Error listening on %s: %s\n", localAddress, err)
+		os.Exit(1)
+	}
+	defer listener.Close()
+
+	// Connect to master in a goroutine (after server is started)
+	go func() {
+		masterAddress := net.JoinHostPort(serverConfig.MasterHost, serverConfig.MasterPort)
+		conn, err := net.Dial("tcp", masterAddress)
+		if err != nil {
+			fmt.Printf("Error connecting to master at %s: %s\n", masterAddress, err)
+			return // Don't kill the entire program
+		}
+		defer conn.Close()
+
+		ping := utils.ToArray([]string{"PING"})
+		conn.Write([]byte(ping))
+
+		// TODO: Handle master communication and replication
+	}()
+
+	for {
+		// Accept connection
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Printf("Error accepting connection: %s\n", err)
+			continue
+		}
+
+		go handleSession(core.NewRedisConnection(conn))
+	}
+}
+
+func startMaster() {
+	go executeCommands()
+
+	localAddress := fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port)
 	// Prepare a listener at port 6379
 	listener, err := net.Listen("tcp", localAddress)
 	if err != nil {
