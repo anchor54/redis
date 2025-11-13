@@ -1,31 +1,44 @@
-package core
+package store
 
 import (
 	"errors"
 	"strconv"
+	"sync"
 	"time"
 
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 )
 
 type KVStore struct {
-	store ds.SyncMap[string, RedisObject]
+	store ds.SyncMap[string, ds.RedisObject]
+}
+
+var (
+	instance	*KVStore
+	once		sync.Once
+)
+
+func GetInstance() *KVStore {
+	once.Do(func() {
+		instance = &KVStore{store: ds.SyncMap[string, ds.RedisObject]{}}
+	})
+	return instance
 }
 
 func (store *KVStore) Delete(key string) {
 	store.store.Delete(key)
 }
 
-func (store *KVStore) Store(key string, value *RedisObject) {
+func (store *KVStore) Store(key string, value *ds.RedisObject) {
 	store.store.Store(key, value)
 }
 
-func (store *KVStore) GetValue(key string) (*RedisObject, bool) {
+func (store *KVStore) GetValue(key string) (*ds.RedisObject, bool) {
 	val, ok := store.store.Load(key)
 	if !ok {
 		return nil, false
 	}
-	if val.ttl != nil && val.ttl.Before(time.Now()) {
+	if val.TTL != nil && val.TTL.Before(time.Now()) {
 		store.Delete(key)
 		return nil, false
 	}
@@ -49,12 +62,12 @@ func (store *KVStore) GetList(key string) (*ds.Deque, bool) {
 }
 
 func (store *KVStore) StoreList(key string, value *ds.Deque) {
-	kvObj := NewListObject(value)
+	kvObj := ds.NewListObject(value)
 	store.store.Store(key, &kvObj)
 }
 
 func (store *KVStore) LoadOrStoreList(key string) (*ds.Deque, bool) {
-	kvObj := NewListObject(ds.NewDeque())
+	kvObj := ds.NewListObject(ds.NewDeque())
 	val, loaded := store.store.LoadOrStore(key, &kvObj)
 	list, ok := ds.AsList(val.Get())
 	if !ok {
@@ -64,7 +77,7 @@ func (store *KVStore) LoadOrStoreList(key string) (*ds.Deque, bool) {
 }
 
 func (store *KVStore) LoadOrStoreStream(key string) (*ds.Stream, bool) {
-	kvObj := RedisObject{value: ds.NewStream(), ttl: nil}
+	kvObj := ds.RedisObject{Value: ds.NewStream(), TTL: nil}
 	val, loaded := store.store.LoadOrStore(key, &kvObj)
 	stream, ok := ds.AsStream(val.Get())
 	if !ok {
@@ -88,18 +101,18 @@ func (store *KVStore) IncrementString(key string) (int, error) {
 	var newCount int
 	var err error
 
-	store.store.Update(key, func(old *RedisObject) *RedisObject {
+	store.store.Update(key, func(old *ds.RedisObject) *ds.RedisObject {
 		// Handle nil or expired keys
 		if old == nil {
 			newCount = 1
-			kvObj := NewStringObject("1")
+			kvObj := ds.NewStringObject("1")
 			return &kvObj
 		}
 
 		// Check if expired
-		if old.ttl != nil && old.ttl.Before(time.Now()) {
+		if old.TTL != nil && old.TTL.Before(time.Now()) {
 			newCount = 1
-			kvObj := NewStringObject("1")
+			kvObj := ds.NewStringObject("1")
 			return &kvObj
 		}
 
@@ -119,10 +132,10 @@ func (store *KVStore) IncrementString(key string) (int, error) {
 
 		newCount = count + 1
 		countStr = strconv.Itoa(newCount)
-		kvObj := NewStringObject(countStr)
+		kvObj := ds.NewStringObject(countStr)
 		// Preserve TTL if it exists
-		if old.ttl != nil {
-			kvObj.ttl = old.ttl
+		if old.TTL != nil {
+			kvObj.TTL = old.TTL
 		}
 		return &kvObj
 	})

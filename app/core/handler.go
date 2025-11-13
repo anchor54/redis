@@ -7,15 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/config"
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
+	"github.com/codecrafters-io/redis-starter-go/app/store"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
-
-var db = KVStore{store: ds.SyncMap[string, RedisObject]{}}
 
 var (
 	ErrInvalidArguments = errors.New("invalid arguments")
 	OKResponse          = "OK"
+	db					= store.GetInstance()
 )
 
 // -------------------------- UTILS --------------------------
@@ -209,7 +210,7 @@ func setHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key, value := args[0], args[1]
-	kvObj := NewStringObject(value)
+	kvObj := ds.NewStringObject(value)
 	db.Store(key, &kvObj)
 
 	// Check if expiry is set
@@ -505,10 +506,11 @@ func incrHandler(cmd *Command) (int, []string, string, error) {
 
 func infoHandler(cmd *Command) (int, []string, string, error) {
 	args := cmd.Args
+	config := config.GetInstance()
 	if len(args) > 0 {
 		key := args[0]
 		if strings.ToLower(key) == "replication" {
-			return -1, []string{}, utils.ToBulkString("role:master"), nil
+			return -1, []string{}, utils.ToBulkString(fmt.Sprintf("role:%s", config.Role)), nil
 		}
 	}
 	return -1, []string{}, utils.ToNullBulkString(), nil

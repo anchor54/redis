@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -28,13 +29,28 @@ type WaitingCommand struct {
 	waitingKeys []string
 }
 
-func main() {
-	const host = "0.0.0.0"
+func parseFlags() (int, config.ServerRole) {
 	var port int
+	var replicaof string
+
 	flag.IntVar(&port, "port", 6379, "The port to run the server on.")
+	flag.StringVar(&replicaof, "replicaof", "", "Master address in format 'host port'")
 	flag.Parse()
 
-	localAddress := fmt.Sprintf("%s:%d", host, port)
+	role := config.Master
+	if replicaof != "" {
+		role = config.Slave
+	}
+
+	return port, role
+}
+
+func main() {
+	port, role := parseFlags()
+	config.Init(&config.Config{Port: port, Role: role})
+	config := config.GetInstance()
+
+	localAddress := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	go executeCommands()
 
 	// Prepare a listener at port 6379
