@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,20 +75,7 @@ func startReplica() {
 	defer listener.Close()
 
 	// Connect to master in a goroutine (after server is started)
-	go func() {
-		masterAddress := net.JoinHostPort(serverConfig.MasterHost, serverConfig.MasterPort)
-		conn, err := net.Dial("tcp", masterAddress)
-		if err != nil {
-			fmt.Printf("Error connecting to master at %s: %s\n", masterAddress, err)
-			return // Don't kill the entire program
-		}
-		defer conn.Close()
-
-		ping := utils.ToArray([]string{"PING"})
-		conn.Write([]byte(ping))
-
-		// TODO: Handle master communication and replication
-	}()
+	go connectToMaster()
 
 	for {
 		// Accept connection
@@ -98,6 +86,96 @@ func startReplica() {
 		}
 
 		go handleSession(core.NewRedisConnection(conn))
+	}
+}
+
+func getMasterResponse(conn *core.RedisConnection) (string, error) {
+	buff := make([]byte, 1024)
+	n, err := conn.Read(buff)
+	if err != nil {
+		return "", err
+	}
+	if n == 0 {
+		return "", errors.New("no data from master")
+	}
+
+	response, err := utils.FromSimpleString(string(buff[:n]))
+	if err != nil {
+		return "", err
+	}
+	fmt.Printf("Response from master: %s\n", response)
+
+	return response, nil
+}
+
+/*
+*
+
+	connectToMaster establishes a connection to the master server and sends a PING command to keep the connection alive.
+	It also handles the replication of commands from the master to the replica.
+*/
+func connectToMaster() {
+	masterAddress := net.JoinHostPort(serverConfig.MasterHost, serverConfig.MasterPort)
+	conn, err := net.DialTimeout("tcp", masterAddress, 10*time.Second)
+	if err != nil {
+		fmt.Printf("Error connecting to master at %s: %s\n", masterAddress, err)
+		return // Don't kill the entire program
+	}
+	defer conn.Close()
+
+	ping := utils.ToArray([]string{"PING"})
+	conn.Write([]byte(ping))
+
+	// Handle master communication and replication
+	response, err := getMasterResponse(core.NewRedisConnection(conn))
+	if err != nil {
+		fmt.Printf("Error getting response from master: %s\n", err)
+		return
+	}
+
+	if response != "PONG" {
+		fmt.Printf("Unexpected response from master: %s\n", response)
+		return
+	}
+
+	fmt.Printf("Connected to master\n")
+
+	// Send both REPLCONF commands and wait for their responses before returning.
+	// We avoid multiple goroutines here because sharing a single net.Conn between
+	// concurrent readers can lead to races; instead we pipeline the commands.
+	replconfListeningPort := utils.ToArray([]string{"REPLCONF", "listening-port", strconv.Itoa(serverConfig.Port)})
+	replconfCapa := utils.ToArray([]string{"REPLCONF", "capa", "psync2"})
+
+	if _, err := conn.Write([]byte(replconfListeningPort)); err != nil {
+		fmt.Printf("Error sending REPLCONF listening-port to master: %s\n", err)
+		return
+	}
+
+	if _, err := conn.Write([]byte(replconfCapa)); err != nil {
+		fmt.Printf("Error sending REPLCONF capa to master: %s\n", err)
+		return
+	}
+
+	masterConn := core.NewRedisConnection(conn)
+
+	response, err = getMasterResponse(masterConn)
+	if err != nil {
+		fmt.Printf("Error getting REPLCONF listening-port response from master: %s\n", err)
+		return
+	}
+	if response != "OK" {
+		fmt.Printf("Unexpected REPLCONF listening-port response from master: %s\n", response)
+		return
+	}
+
+	response, err = getMasterResponse(masterConn)
+	if err != nil {
+		fmt.Printf("Error getting REPLCONF capa response from master: %s\n", err)
+		return
+	}
+	if response != "OK" {
+		fmt.Printf("Unexpected REPLCONF capa response from master: %s\n", response)
+		return
 	}
 }
 

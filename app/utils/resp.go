@@ -119,6 +119,23 @@ func ToSimpleString(s string) string {
 	return fmt.Sprintf("+%s\r\n", s)
 }
 
+// FromSimpleString converts a RESP Simple String to a Go string.
+// Expects format: "+<string>\r\n"
+func FromSimpleString(resp string) (string, error) {
+	if len(resp) < 3 {
+		return "", fmt.Errorf("invalid simple string: too short")
+	}
+	if resp[0] != '+' {
+		return "", fmt.Errorf("invalid simple string: must start with '+'")
+	}
+	if !strings.HasSuffix(resp, "\r\n") {
+		return "", fmt.Errorf("invalid simple string: must end with \\r\\n")
+	}
+
+	// Remove '+' prefix and '\r\n' suffix
+	return resp[1 : len(resp)-2], nil
+}
+
 // ToBulkString converts a Go string to a RESP Bulk String.
 func ToBulkString(s string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)
