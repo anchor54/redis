@@ -26,7 +26,9 @@ func NewSessionHandler(queue *command.Queue) *SessionHandler {
 func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
 	defer conn.Close()
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4096)
+	buffer := "" // Per-connection buffer to accumulate incomplete data
+
 	for {
 		n, readErr := conn.Read(buf)
 		if readErr != nil {
@@ -38,11 +40,39 @@ func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
 		if n == 0 {
 			return
 		}
-		sh.handleRequest(conn, string(buf[:n]))
+
+		// Append new data to buffer
+		buffer += string(buf[:n])
+
+		// Parse and handle all complete commands in the buffer
+		buffer = sh.handleRequests(conn, buffer)
 	}
 }
 
-// handleRequest processes a single request from the client
+// handleRequests processes multiple requests from the accumulated buffer
+// Returns the remaining unparsed data
+func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer string) string {
+	// Try to parse multiple commands from the buffer
+	commands, remaining, err := command.ParseMultipleRequests(buffer)
+	fmt.Printf("commands: %v, remaining: %s, err: %v\n", commands, remaining, err)
+	if err != nil {
+		fmt.Printf("Error parsing commands: %s\n", err)
+		// On error, try to parse as single command (for backward compatibility)
+		sh.handleRequest(conn, buffer)
+		return ""
+	}
+
+	// Process each parsed command
+	for _, cmd := range commands {
+		fmt.Printf("command: %s, args: %v\n", cmd.Name, cmd.Args)
+		sh.router.Route(conn, cmd.Name, cmd.Args)
+	}
+
+	// Return remaining unparsed data
+	return remaining
+}
+
+// handleRequest processes a single request (fallback for old behavior)
 func (sh *SessionHandler) handleRequest(conn *core.RedisConnection, data string) {
 	cmdName, args, parseErr := command.ParseRequest(data)
 	if parseErr != nil {

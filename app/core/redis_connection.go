@@ -9,29 +9,31 @@ import (
 )
 
 type RedisConnection struct {
-	conn 			net.Conn
-	inTransaction 	bool
-	queuedCommands 	[]Command
+	conn             net.Conn
+	inTransaction    bool
+	queuedCommands   []Command
+	suppressResponse bool
 }
 
 type Command struct {
-	Command string
-	Args    []string
+	Command  string
+	Args     []string
 	Response chan string
 }
 
 func NewRedisConnection(conn net.Conn) *RedisConnection {
 	return &RedisConnection{
-		conn: conn,
-		inTransaction: false,
-		queuedCommands: make([]Command, 0),
+		conn:             conn,
+		inTransaction:    false,
+		queuedCommands:   make([]Command, 0),
+		suppressResponse: false,
 	}
 }
 
 func CreateCommand(command string, args ...string) Command {
 	return Command{
-		Command: command,
-		Args:    args,
+		Command:  command,
+		Args:     args,
 		Response: make(chan string),
 	}
 }
@@ -60,6 +62,9 @@ func (conn *RedisConnection) Read(p []byte) (int, error) {
 }
 
 func (conn *RedisConnection) SendResponse(message string) {
+	if conn.suppressResponse {
+		return
+	}
 	_, err := conn.conn.Write([]byte(message))
 	if err != nil {
 		fmt.Printf("Error writing response: %s\n", err)
@@ -93,4 +98,12 @@ func (conn *RedisConnection) DiscardTransaction() (string, error) {
 	conn.inTransaction = false
 	conn.queuedCommands = make([]Command, 0)
 	return utils.ToSimpleString(OKResponse), nil
+}
+
+func (conn *RedisConnection) SetSuppressResponse(suppress bool) {
+	conn.suppressResponse = suppress
+}
+
+func (conn *RedisConnection) IsSuppressResponse() bool {
+	return conn.suppressResponse
 }

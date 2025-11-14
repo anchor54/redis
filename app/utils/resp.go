@@ -13,11 +13,11 @@ import (
 // a string (for bulk strings) or []interface{} (for nested arrays).
 func ParseRESPArray(resp string) ([]interface{}, error) {
 	reader := bufio.NewReader(bytes.NewBufferString(resp))
-	return parseRESPArrayRecursive(reader)
+	return ParseRESPArrayRecursive(reader)
 }
 
-// parseRESPArrayRecursive is a helper function that recursively parses RESP arrays
-func parseRESPArrayRecursive(reader *bufio.Reader) ([]interface{}, error) {
+// ParseRESPArrayRecursive is a helper function that recursively parses RESP arrays
+func ParseRESPArrayRecursive(reader *bufio.Reader) ([]interface{}, error) {
 	// 1️⃣ Expect array prefix: *<count>\r\n
 	prefix, err := reader.ReadString('\n')
 	if err != nil {
@@ -50,7 +50,7 @@ func parseRESPArrayRecursive(reader *bufio.Reader) ([]interface{}, error) {
 
 		if peek[0] == '*' {
 			// It's a nested array - recursively parse it
-			nestedArray, err := parseRESPArrayRecursive(reader)
+			nestedArray, err := ParseRESPArrayRecursive(reader)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing nested array: %w", err)
 			}
