@@ -9,32 +9,32 @@ import (
 )
 
 type Config struct {
-	Host			string
-	Port			int
-	Role			ServerRole
-	MasterHost		string
-	MasterPort		string
-	ReplicationID 	string
-	Offset			int
+	Host          string
+	Port          int
+	Role          ServerRole
+	MasterHost    string
+	MasterPort    string
+	ReplicationID string
+	Offset        int
 }
 
 type ConfigOptions struct {
-	Port			int
-	Role			ServerRole
-	MasterAddress	string
+	Port          int
+	Role          ServerRole
+	MasterAddress string
 }
 
 var (
-	instance	*Config
-	once		sync.Once
+	instance *Config
+	once     sync.Once
 )
 
 func Init(opts *ConfigOptions) {
-	once.Do(func ()  {
+	once.Do(func() {
 		instance = &Config{
-			Host: "0.0.0.0",
-			Port: 6379,
-			Role: Master,
+			Host:          "0.0.0.0",
+			Port:          6379,
+			Role:          Master,
 			ReplicationID: utils.GenerateUniqueID(),
 		}
 
@@ -51,6 +51,10 @@ func Init(opts *ConfigOptions) {
 			instance.MasterHost, instance.MasterPort = parts[0], parts[1]
 		}
 
+		if instance.Role == Slave {
+			instance.ReplicationID = "?"
+			instance.Offset = -1
+		}
 	})
 }
 
