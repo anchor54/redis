@@ -13,6 +13,7 @@ type RedisConnection struct {
 	inTransaction    bool
 	queuedCommands   []Command
 	suppressResponse bool
+	isMaster         bool
 }
 
 type Command struct {
@@ -27,6 +28,7 @@ func NewRedisConnection(conn net.Conn) *RedisConnection {
 		inTransaction:    false,
 		queuedCommands:   make([]Command, 0),
 		suppressResponse: false,
+		isMaster:         false,
 	}
 }
 
@@ -106,4 +108,12 @@ func (conn *RedisConnection) SetSuppressResponse(suppress bool) {
 
 func (conn *RedisConnection) IsSuppressResponse() bool {
 	return conn.suppressResponse
+}
+
+func (conn *RedisConnection) MarkAsMaster() {
+	conn.isMaster = true
+}
+
+func (conn *RedisConnection) IsMaster() bool {
+	return conn.isMaster
 }

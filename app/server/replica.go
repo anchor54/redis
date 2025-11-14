@@ -120,6 +120,7 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, error) {
 
 	fmt.Printf("Handshake with master complete\n")
 	masterConn.SetSuppressResponse(false)
+	masterConn.MarkAsMaster()
 	return masterConn, nil
 }
 
@@ -265,7 +266,6 @@ func (rs *ReplicaServer) getMasterResponse(conn *core.RedisConnection) (string, 
 		return "", errors.New("no data from master")
 	}
 
-	fmt.Printf("Raw response from master: %v\n", string(buff[:n]))
 	response, err := utils.FromSimpleString(string(buff[:n]))
 	if err != nil {
 		return "", err

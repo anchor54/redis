@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -41,11 +42,19 @@ func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
 			return
 		}
 
+		if conn.IsMaster() {
+			fmt.Println("master sent: ", string(buf[:n]))
+		}
 		// Append new data to buffer
 		buffer += string(buf[:n])
-
+		
 		// Parse and handle all complete commands in the buffer
 		buffer = sh.handleRequests(conn, buffer)
+		
+		if conn.IsMaster() {
+			fmt.Printf("Received %d bytes from master\n", n)
+			config.GetInstance().Offset += n
+		}
 	}
 }
 

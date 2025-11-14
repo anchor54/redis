@@ -158,7 +158,7 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 		}
 
 	case "getack":
-		fmt.Printf("handleReplconf: getack\n")
+		fmt.Printf("Sending ACK to master, offset: %d\n", config.GetInstance().Offset)
 		conn.SetSuppressResponse(false)
 		conn.SendResponse(utils.ToArray(
 			[]string{"REPLCONF", "ACK", strconv.Itoa(config.GetInstance().Offset)},
