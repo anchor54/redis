@@ -133,7 +133,7 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 		return err.ErrInvalidArguments
 	}
 	// Implement proper REPLCONF handling based on args
-	replicaInfo := replication.NewReplicaInfo()
+	replicaInfo := replication.NewReplicaInfo(conn)
 
 	switch args[0] {
 	case "listening-port":
@@ -179,6 +179,18 @@ func (cr *CommandRouter) handlePsync(conn *core.RedisConnection, args []string, 
 			return err
 		}
 		conn.SendResponse(fmt.Sprintf("$%d\r\n%s", len(file), file))
+
+		// Mark the handshake as complete for this replica
+		manager := replication.GetManager()
+		replicas := manager.GetAllReplicas()
+		// Find the replica with this connection and mark handshake as done
+		for _, replica := range replicas {
+			if replica.Connection == conn {
+				replica.SetHandshakeDone()
+				break
+			}
+		}
+
 		return nil
 	}
 

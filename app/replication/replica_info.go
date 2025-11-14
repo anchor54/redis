@@ -1,16 +1,29 @@
 package replication
 
+import (
+	"github.com/codecrafters-io/redis-starter-go/app/core"
+)
+
 // ReplicaInfo holds basic information about a connected replica
 type ReplicaInfo struct {
-	ListeningPort int      // Port the replica is listening on (from REPLCONF listening-port)
-	Capabilities  []string // Capabilities reported by replica (from REPLCONF capa, e.g., "psync2")
+	Connection      *core.RedisConnection // Connection to the replica
+	ListeningPort   int                   // Port the replica is listening on (from REPLCONF listening-port)
+	Capabilities    []string              // Capabilities reported by replica (from REPLCONF capa, e.g., "psync2")
+	IsHandshakeDone bool                  // Whether the handshake is done
 }
 
 // NewReplicaInfo creates a new ReplicaInfo
-func NewReplicaInfo() *ReplicaInfo {
+func NewReplicaInfo(conn *core.RedisConnection) *ReplicaInfo {
 	return &ReplicaInfo{
-		Capabilities: make([]string, 0),
+		Connection:      conn,
+		Capabilities:    make([]string, 0),
+		IsHandshakeDone: false,
 	}
+}
+
+// SetHandshakeDone sets the handshake done flag
+func (r *ReplicaInfo) SetHandshakeDone() {
+	r.IsHandshakeDone = true
 }
 
 // AddCapability adds a capability to the replica
