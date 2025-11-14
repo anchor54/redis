@@ -67,6 +67,12 @@ func (sh *SessionHandler) handleRequest(conn *core.RedisConnection, data string)
 		return
 	}
 
+	// Handle REPLCONF command
+	if cmdName == "REPLCONF" {
+		conn.SendResponse(utils.ToSimpleString("OK"))
+		return
+	}
+
 	// Handle MULTI command
 	if cmdName == "MULTI" {
 		resp, multiErr := conn.StartTransaction()
@@ -108,7 +114,7 @@ func (sh *SessionHandler) handleRequest(conn *core.RedisConnection, data string)
 
 	// Handle other commands
 	commandObj := command.CreateCommand(cmdName, args)
-	
+
 	// If in transaction, enqueue command
 	if conn.IsInTransaction() {
 		queued, queueErr := conn.EnqueueCommand(commandObj)
@@ -128,4 +134,3 @@ func (sh *SessionHandler) handleRequest(conn *core.RedisConnection, data string)
 	response := <-commandObj.Response
 	conn.SendResponse(response)
 }
-
