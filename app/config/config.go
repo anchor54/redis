@@ -8,14 +8,15 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
+// Config holds server configuration
 type Config struct {
-	Host          string
-	Port          int
-	Role          ServerRole
-	MasterHost    string
-	MasterPort    string
-	ReplicationID string
-	Offset        int
+	Host          string     // Host address to bind to
+	Port          int        // Port to listen on
+	Role          ServerRole // Server role (master or slave)
+	MasterHost    string     // Master host (for replicas only)
+	MasterPort    string     // Master port (for replicas only)
+	ReplicationID string     // Replication ID (both master and replica)
+	Offset        int        // Replication offset (both master and replica)
 }
 
 type ConfigOptions struct {
@@ -35,7 +36,8 @@ func Init(opts *ConfigOptions) {
 			Host:          "0.0.0.0",
 			Port:          6379,
 			Role:          Master,
-			ReplicationID: utils.GenerateUniqueID(),
+			ReplicationID: utils.GenerateReplicationID(),
+			Offset:        0,
 		}
 
 		if opts.Port != 0 {
@@ -65,6 +67,7 @@ func GetInstance() *Config {
 	return instance
 }
 
+// String returns replication info for INFO command
 func (config *Config) String() string {
 	return fmt.Sprintf(
 		"role:%s\nmaster_replid:%s\nmaster_repl_offset:%d",

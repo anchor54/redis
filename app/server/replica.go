@@ -139,6 +139,7 @@ func (rs *ReplicaServer) sendReplconfCommands(conn net.Conn, masterConn *core.Re
 }
 
 func (rs *ReplicaServer) sendPsync(conn net.Conn) error {
+	// Use replication ID and offset from config
 	psync := utils.ToArray([]string{"PSYNC", rs.config.ReplicationID, strconv.Itoa(rs.config.Offset)})
 	if _, err := conn.Write([]byte(psync)); err != nil {
 		return fmt.Errorf("error sending PSYNC: %w", err)
@@ -165,4 +166,3 @@ func (rs *ReplicaServer) getMasterResponse(conn *core.RedisConnection) (string, 
 
 	return response, nil
 }
-
