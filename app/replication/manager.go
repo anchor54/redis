@@ -2,14 +2,17 @@ package replication
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 
+	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
 // Manager manages all replica connections
 type Manager struct {
-	replicas []*ReplicaInfo // Map of replica ID -> ReplicaInfo
+	replicas map[*core.RedisConnection]*ReplicaInfo // Map of replica ID -> ReplicaInfo
 	mu       sync.RWMutex   // Protects concurrent access
 }
 
@@ -22,7 +25,7 @@ var (
 func GetManager() *Manager {
 	once.Do(func() {
 		manager = &Manager{
-			replicas: make([]*ReplicaInfo, 0),
+			replicas: make(map[*core.RedisConnection]*ReplicaInfo),
 		}
 	})
 	return manager
@@ -33,27 +36,21 @@ func (m *Manager) AddReplica(replicaInfo *ReplicaInfo) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.replicas = append(m.replicas, replicaInfo)
+	m.replicas[replicaInfo.Connection] = replicaInfo
 }
 
 // GetAllReplicas returns all replicas
 func (m *Manager) GetAllReplicas() []*ReplicaInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.replicas
+	return slices.Collect(maps.Values(m.replicas))
 }
 
-// GetConnectedReplicas returns only replicas that have completed handshake
-func (m *Manager) GetConnectedReplicas() []*ReplicaInfo {
+// GetReplica returns the replica info for the given connection
+func (m *Manager) GetReplica(conn *core.RedisConnection) *ReplicaInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	connectedReplicas := make([]*ReplicaInfo, 0)
-	for _, replica := range m.replicas {
-		if replica.IsHandshakeDone {
-			connectedReplicas = append(connectedReplicas, replica)
-		}
-	}
-	return connectedReplicas
+	return m.replicas[conn]
 }
 
 // GetReplicaCount returns the number of connected replicas

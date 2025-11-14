@@ -54,7 +54,6 @@ func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
 func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer string) string {
 	// Try to parse multiple commands from the buffer
 	commands, remaining, err := command.ParseMultipleRequests(buffer)
-	fmt.Printf("commands: %v, remaining: %s, err: %v\n", commands, remaining, err)
 	if err != nil {
 		fmt.Printf("Error parsing commands: %s\n", err)
 		// On error, try to parse as single command (for backward compatibility)

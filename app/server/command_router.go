@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
@@ -134,8 +135,13 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 	}
 	// Implement proper REPLCONF handling based on args
 	replicaInfo := replication.NewReplicaInfo(conn)
+	if existingReplicaInfo := replication.GetManager().GetReplica(conn); existingReplicaInfo != nil {
+		replicaInfo = existingReplicaInfo
+	} else {
+		replication.GetManager().AddReplica(replicaInfo)
+	}
 
-	switch args[0] {
+	switch strings.ToLower(args[0]) {
 	case "listening-port":
 		port, err := strconv.Atoi(args[1])
 		if err != nil {
@@ -150,8 +156,15 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 			replicaInfo.AddCapability(args[1])
 			args = args[2:]
 		}
+
+	case "getack":
+		conn.SetSuppressResponse(false)
+		conn.SendResponse(utils.ToArray(
+			[]string{"REPLCONF", "ACK", strconv.Itoa(config.GetInstance().Offset)},
+		))
+		conn.SetSuppressResponse(true)
+		return nil
 	}
-	replication.GetManager().AddReplica(replicaInfo)
 	conn.SendResponse(utils.ToSimpleString("OK"))
 	return nil
 }
