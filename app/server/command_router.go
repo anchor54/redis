@@ -1,6 +1,9 @@
 package server
 
 import (
+	"encoding/hex"
+	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
@@ -131,7 +134,7 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 	}
 	// Implement proper REPLCONF handling based on args
 	replicaInfo := replication.NewReplicaInfo()
-	
+
 	switch args[0] {
 	case "listening-port":
 		port, err := strconv.Atoi(args[1])
@@ -162,10 +165,20 @@ func (cr *CommandRouter) handlePsync(conn *core.RedisConnection, args []string, 
 	if err != nil {
 		return err
 	}
-	
+
 	config := config.GetInstance()
 	if replicationID != config.ReplicationID {
 		conn.SendResponse(utils.ToSimpleString("FULLRESYNC " + config.ReplicationID + " 0"))
+		hexData, err := os.ReadFile("app/data/dump.rdb")
+		if err != nil {
+			return err
+		}
+		// Decode hex string to bytes
+		file, err := hex.DecodeString(string(hexData))
+		if err != nil {
+			return err
+		}
+		conn.SendResponse(fmt.Sprintf("$%d\r\n%s", len(file), file))
 		return nil
 	}
 
