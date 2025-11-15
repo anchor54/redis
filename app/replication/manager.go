@@ -1,10 +1,8 @@
 package replication
 
 import (
-	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 
@@ -68,7 +66,7 @@ func (m *Manager) PropagateCommand(cmdName string, args []string) {
 	if config.GetInstance().Role == config.Slave {
 		return
 	}
-	
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -90,34 +88,29 @@ func (m *Manager) PropagateCommand(cmdName string, args []string) {
 func (m *Manager) WaitForReplicas(minReplicasToWaitFor int, timeout int) int {
 	// If no replicas (who have completed the handshake) are available, return 0
 	// If no replicas are needed to be waited for, return 0
-	if minReplicasToWaitFor == 0 || len(m.getEligibleReplicas()) == 0 || config.GetInstance().Offset == 0 {
+	if minReplicasToWaitFor == 0 || len(m.getEligibleReplicas()) == 0 {
 		return 0
 	}
 
-	// If no timeout is specified, wait indefinitely
-	if timeout == 0 {
-		for {
-			updatedReplicas := m.sendGetAckToReplicas()
-			if updatedReplicas >= minReplicasToWaitFor {
-				return updatedReplicas
-			}
-		}
+	if config.GetInstance().Offset == 0 {
+		return m.GetReplicaCount()
 	}
-	
-	updatedReplicas := make(chan int)
-	timer := time.NewTimer(time.Duration(timeout) * time.Millisecond)
-	defer timer.Stop()
+
+	deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
 
 	for {
-		updatedReplicas <- m.sendGetAckToReplicas()
-		select {
-		case <-timer.C:
-			return <-updatedReplicas
-		case updatedReplicas := <-updatedReplicas:
-			if updatedReplicas >= minReplicasToWaitFor {
-				return updatedReplicas
-			}
+		updatedReplicas := m.sendGetAckToReplicas()
+
+		if updatedReplicas >= minReplicasToWaitFor {
+			return updatedReplicas
 		}
+
+		if timeout > 0 && time.Now().After(deadline) {
+			return updatedReplicas
+		}
+
+		// Small sleep to avoid busy loop; ACKs are processed in the session goroutine
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -131,80 +124,21 @@ func (m *Manager) getEligibleReplicas() []*ReplicaInfo {
 	return eligibleReplicas
 }
 
+// sendGetAckToReplicas: ask replicas for ACK, then count those whose LastAckOffset
+// has caught up to our current offset.
 func (m *Manager) sendGetAckToReplicas() int {
-	eligibleReplicas := m.getEligibleReplicas()
+	m.PropagateCommand("REPLCONF", []string{"GETACK", "*"})
 
-	if len(eligibleReplicas) == 0 {
-		return 0
-	}
-
-	replicaOffsets := make(chan int, len(eligibleReplicas))
-
-	var wg sync.WaitGroup
-
-	for _, replica := range eligibleReplicas {
-		wg.Add(1)
-		go func(r *ReplicaInfo) {
-			defer wg.Done()
-			r.Connection.SendResponse(utils.ToArray([]string{"REPLCONF", "GETACK", "*"}))
-			replicaOffset := m.readReplicaOffset(r)
-			replicaOffsets <- replicaOffset
-		}(replica)
-	}
-
-	// Close the channel once all goroutines are done
-	go func() {
-		wg.Wait()
-		close(replicaOffsets)
-	}()
+	// Give replicas a brief moment to respond and for the session loop to parse + update LastAckOffset.
+	time.Sleep(10 * time.Millisecond)
 
 	updatedReplicas := 0
-	for offset := range replicaOffsets {
-		if offset >= config.GetInstance().Offset {
+	currentOffset := config.GetInstance().Offset
+	for _, replica := range m.GetAllReplicas() {
+		if replica.LastAckOffset >= currentOffset {
 			updatedReplicas++
 		}
 	}
 
 	return updatedReplicas
-}
-
-func (m *Manager) readReplicaOffset(replica *ReplicaInfo) int {
-	buf := make([]byte, 1024)
-	n, err := replica.Connection.Read(buf)
-	if err != nil {
-		return -1
-	}
-
-	respArray, err := utils.ParseRESPArray(string(buf[:n]))
-	if err != nil {
-		fmt.Printf("Failed to parse RESP array from replica: %v\n", err)
-		return -1
-	}
-
-	// Flatten to get string array
-	cmdParts := utils.FlattenRESPArray(respArray)
-
-	// Verify it's REPLCONF ACK <number>
-	if len(cmdParts) != 3 {
-		fmt.Printf("Invalid response format: expected 3 parts, got %d\n", len(cmdParts))
-		return -1
-	}
-
-	if cmdParts[0] != "REPLCONF" || cmdParts[1] != "ACK" {
-		fmt.Printf("Invalid response: expected REPLCONF ACK, got %s %s\n", cmdParts[0], cmdParts[1])
-		return -1
-	}
-
-	// Extract the number (offset)
-	offset := cmdParts[2]
-	fmt.Printf("Replica acknowledged with offset: %s\n", offset)
-
-	// If you need the offset as an integer:
-	offsetNum, err := strconv.Atoi(offset)
-	if err != nil {
-		fmt.Printf("Invalid offset number: %s\n", offset)
-		return -1
-	}
-
-	return offsetNum
 }

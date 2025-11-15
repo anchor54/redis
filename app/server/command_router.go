@@ -134,6 +134,7 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 	if len(args) < 2 {
 		return err.ErrInvalidArguments
 	}
+
 	// Implement proper REPLCONF handling based on args
 	replicaInfo := replication.NewReplicaInfo(conn)
 	if existingReplicaInfo := replication.GetManager().GetReplica(conn); existingReplicaInfo != nil {
@@ -166,7 +167,18 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 		))
 		conn.SetSuppressResponse(true)
 		return nil
+
+	case "ack":
+		// NEW: replica tells us the offset it has processed
+		offset, err := strconv.Atoi(args[1])
+		if err != nil {
+			return err
+		}
+		replicaInfo.LastAckOffset = offset
+		// For ACK we don't send any response back
+		return nil
 	}
+
 	conn.SendResponse(utils.ToSimpleString("OK"))
 	return nil
 }

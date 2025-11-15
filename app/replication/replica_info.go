@@ -10,6 +10,7 @@ type ReplicaInfo struct {
 	ListeningPort   int                   // Port the replica is listening on (from REPLCONF listening-port)
 	Capabilities    []string              // Capabilities reported by replica (from REPLCONF capa, e.g., "psync2")
 	IsHandshakeDone bool                  // Whether the handshake is done
+	LastAckOffset   int                   // NEW: last offset ACKed by this replica
 }
 
 // NewReplicaInfo creates a new ReplicaInfo
@@ -18,6 +19,7 @@ func NewReplicaInfo(conn *core.RedisConnection) *ReplicaInfo {
 		Connection:      conn,
 		Capabilities:    make([]string, 0),
 		IsHandshakeDone: false,
+		LastAckOffset:   0,
 	}
 }
 
