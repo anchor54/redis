@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -75,14 +76,14 @@ func (m *Manager) PropagateCommand(cmdName string, args []string) {
 	cmdArray = append(cmdArray, args...)
 	respCommand := utils.ToArray(cmdArray)
 
-	// Increment the master offset
-	config.GetInstance().Offset += len(respCommand)
-
 	// Send to all connected replicas
 	eligibleReplicas := m.getEligibleReplicas()
 	for _, replica := range eligibleReplicas {
 		replica.Connection.SendResponse(respCommand)
 	}
+	
+	// Increment the master offset
+	config.GetInstance().Offset += len(respCommand)
 }
 
 func (m *Manager) WaitForReplicas(minReplicasToWaitFor int, timeout int) int {
@@ -96,10 +97,11 @@ func (m *Manager) WaitForReplicas(minReplicasToWaitFor int, timeout int) int {
 		return m.GetReplicaCount()
 	}
 
+	currentOffset := config.GetInstance().Offset
 	deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
 
 	for {
-		updatedReplicas := m.sendGetAckToReplicas()
+		updatedReplicas := m.sendGetAckToReplicas(currentOffset)
 
 		if updatedReplicas >= minReplicasToWaitFor {
 			return updatedReplicas
@@ -126,16 +128,15 @@ func (m *Manager) getEligibleReplicas() []*ReplicaInfo {
 
 // sendGetAckToReplicas: ask replicas for ACK, then count those whose LastAckOffset
 // has caught up to our current offset.
-func (m *Manager) sendGetAckToReplicas() int {
+func (m *Manager) sendGetAckToReplicas(targetOffset int) int {
 	m.PropagateCommand("REPLCONF", []string{"GETACK", "*"})
 
 	// Give replicas a brief moment to respond and for the session loop to parse + update LastAckOffset.
 	time.Sleep(10 * time.Millisecond)
 
 	updatedReplicas := 0
-	currentOffset := config.GetInstance().Offset
 	for _, replica := range m.GetAllReplicas() {
-		if replica.LastAckOffset >= currentOffset {
+		if replica.LastAckOffset >= targetOffset {
 			updatedReplicas++
 		}
 	}

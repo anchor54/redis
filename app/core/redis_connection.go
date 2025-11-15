@@ -117,3 +117,7 @@ func (conn *RedisConnection) MarkAsMaster() {
 func (conn *RedisConnection) IsMaster() bool {
 	return conn.isMaster
 }
+
+func (conn *RedisConnection) GetAddress() string {
+	return conn.conn.RemoteAddr().String()
+}

@@ -175,6 +175,7 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 			return err
 		}
 		replicaInfo.LastAckOffset = offset
+		fmt.Printf("Replica %s offset: %d\n", conn.GetAddress(), offset)
 		// For ACK we don't send any response back
 		return nil
 	}

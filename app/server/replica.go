@@ -40,20 +40,20 @@ func (rs *ReplicaServer) Start() error {
 	}
 
 	// 1) Kick off master handshake in a separate goroutine
-    go func() {
-        masterConn, remainingData, err := rs.connectToMaster()
-        if err != nil {
-            fmt.Printf("Error connecting to master: %s\n", err)
-            return
-        }
-        defer masterConn.Close()
+	go func() {
+		masterConn, remainingData, err := rs.connectToMaster()
+		if err != nil {
+			fmt.Printf("Error connecting to master: %s\n", err)
+			return
+		}
+		defer masterConn.Close()
 
-        // This will block on the master link, but only in this goroutine
-        rs.sessionHandler.HandleWithInitialData(masterConn, remainingData)
-    }()
+		// This will block on the master link, but only in this goroutine
+		rs.sessionHandler.HandleWithInitialData(masterConn, remainingData)
+	}()
 
-    // 2) Use the listener loop to keep the server process alive
-    rs.handleConnection(&listener)
+	// 2) Use the listener loop to keep the server process alive
+	rs.handleConnection(&listener)
 	return nil
 }
 
@@ -93,6 +93,8 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error
 
 	// Handle master communication and replication
 	masterConn := core.NewRedisConnection(conn)
+	masterConn.SetSuppressResponse(false)
+	masterConn.MarkAsMaster()
 	response, err := rs.getMasterResponse(masterConn)
 	if err != nil {
 		fmt.Printf("Error getting response from master: %s\n", err)
@@ -120,8 +122,6 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error
 	}
 
 	fmt.Printf("Handshake with master complete\n")
-	masterConn.SetSuppressResponse(false)
-	masterConn.MarkAsMaster()
 	return masterConn, remainingData, nil
 }
 
