@@ -1,7 +1,6 @@
 package replication
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"sync"
