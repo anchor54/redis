@@ -41,6 +41,7 @@ func (cr *CommandRouter) registerSessionHandlers() {
 	cr.sessionHandlers["DISCARD"] = cr.handleDiscard
 	cr.sessionHandlers["REPLCONF"] = cr.handleReplconf
 	cr.sessionHandlers["PSYNC"] = cr.handlePsync
+	cr.sessionHandlers["WAIT"] = cr.handleWait
 }
 
 // Route routes a command to the appropriate handler
@@ -209,5 +210,23 @@ func (cr *CommandRouter) handlePsync(conn *core.RedisConnection, args []string, 
 	}
 
 	conn.SendResponse(utils.ToSimpleString("OK"))
+	return nil
+}
+
+func (cr *CommandRouter) handleWait(conn *core.RedisConnection, args []string, _ *command.Queue) error {
+	if len(args) < 2 {
+		return err.ErrInvalidArguments
+	}
+	replicasToWaitFor, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+	timeout, err := strconv.Atoi(args[1])
+	if err != nil {
+		return err
+	}
+
+	updatedReplicas := replication.GetManager().WaitForReplicas(replicasToWaitFor, timeout)
+	conn.SendResponse(utils.ToRespInt(updatedReplicas))
 	return nil
 }

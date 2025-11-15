@@ -41,7 +41,7 @@ func (rs *ReplicaServer) Start() error {
 
 	// 1) Kick off master handshake in a separate goroutine
     go func() {
-        masterConn, err := rs.connectToMaster()
+        masterConn, remainingData, err := rs.connectToMaster()
         if err != nil {
             fmt.Printf("Error connecting to master: %s\n", err)
             return
@@ -49,7 +49,7 @@ func (rs *ReplicaServer) Start() error {
         defer masterConn.Close()
 
         // This will block on the master link, but only in this goroutine
-        rs.sessionHandler.Handle(masterConn)
+        rs.sessionHandler.HandleWithInitialData(masterConn, remainingData)
     }()
 
     // 2) Use the listener loop to keep the server process alive
@@ -79,12 +79,12 @@ func (rs *ReplicaServer) Run() {
 }
 
 // connectToMaster establishes a connection to the master server
-func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, error) {
+func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error) {
 	masterAddress := net.JoinHostPort(rs.config.MasterHost, rs.config.MasterPort)
 	conn, err := net.DialTimeout("tcp", masterAddress, 10*time.Second)
 	if err != nil {
 		fmt.Printf("Error connecting to master at %s: %s\n", masterAddress, err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Send PING
@@ -96,12 +96,12 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, error) {
 	response, err := rs.getMasterResponse(masterConn)
 	if err != nil {
 		fmt.Printf("Error getting response from master: %s\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	if response != "PONG" {
 		fmt.Printf("Unexpected response from master: %s\n", response)
-		return nil, errors.New("unexpected response from master")
+		return nil, nil, errors.New("unexpected response from master")
 	}
 
 	fmt.Printf("Connected to master\n")
@@ -109,19 +109,20 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, error) {
 	// Send REPLCONF commands
 	if err := rs.sendReplconfCommands(masterConn); err != nil {
 		fmt.Printf("Error during REPLCONF: %s\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Send PSYNC
-	if err := rs.sendPsync(masterConn); err != nil {
+	remainingData, err := rs.sendPsync(masterConn)
+	if err != nil {
 		fmt.Printf("Error sending PSYNC: %s\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	fmt.Printf("Handshake with master complete\n")
 	masterConn.SetSuppressResponse(false)
 	masterConn.MarkAsMaster()
-	return masterConn, nil
+	return masterConn, remainingData, nil
 }
 
 // sendReplconfCommands sends REPLCONF commands to the master
@@ -155,7 +156,7 @@ func (rs *ReplicaServer) sendReplconfCommands(masterConn *core.RedisConnection) 
 	return nil
 }
 
-func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) error {
+func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) ([]byte, error) {
 	// Use replication ID and offset from config
 	psync := utils.ToArray([]string{"PSYNC", rs.config.ReplicationID, strconv.Itoa(rs.config.Offset)})
 	conn.SendResponse(psync)
@@ -164,10 +165,10 @@ func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) error {
 	buff := make([]byte, 4096)
 	n, err := conn.Read(buff)
 	if err != nil {
-		return fmt.Errorf("error reading PSYNC response: %w", err)
+		return nil, fmt.Errorf("error reading PSYNC response: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("no data from master")
+		return nil, fmt.Errorf("no data from master")
 	}
 
 	data := buff[:n]
@@ -175,27 +176,27 @@ func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) error {
 	// Parse the FULLRESYNC simple string (format: +FULLRESYNC <replid> <offset>\r\n)
 	crlfIdx := bytes.Index(data, []byte("\r\n"))
 	if crlfIdx < 0 {
-		return fmt.Errorf("no CRLF found in PSYNC response")
+		return nil, fmt.Errorf("no CRLF found in PSYNC response")
 	}
 
 	simpleString := string(data[:crlfIdx+2])
 	response, err := utils.FromSimpleString(simpleString)
 	if err != nil {
-		return fmt.Errorf("error parsing FULLRESYNC: %w", err)
+		return nil, fmt.Errorf("error parsing FULLRESYNC: %w", err)
 	}
 
 	if !strings.Contains(response, "FULLRESYNC") {
-		return fmt.Errorf("unexpected PSYNC response: %s", response)
+		return nil, fmt.Errorf("unexpected PSYNC response: %s", response)
 	}
 
 	parts := strings.Split(response, " ")
 	if len(parts) < 3 {
-		return fmt.Errorf("unexpected PSYNC response: %s", response)
+		return nil, fmt.Errorf("unexpected PSYNC response: %s", response)
 	}
 	replicationID := parts[1]
 	offset, err := strconv.Atoi(parts[2])
 	if err != nil {
-		return fmt.Errorf("error parsing PSYNC offset: %w", err)
+		return nil, fmt.Errorf("error parsing PSYNC offset: %w", err)
 	}
 
 	config := config.GetInstance()
@@ -211,48 +212,49 @@ func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) error {
 		remainingData = make([]byte, 4096)
 		n, err = conn.Read(remainingData)
 		if err != nil {
-			return fmt.Errorf("error reading RDB file: %w", err)
+			return nil, fmt.Errorf("error reading RDB file: %w", err)
 		}
 		remainingData = remainingData[:n]
 	}
 
 	// Extract the RDB file from bulk string format
-	_, err = extractBinary(remainingData)
+	binaryData, remainingData, err := extractBinary(remainingData)
 	if err != nil {
-		return fmt.Errorf("error extracting RDB binary: %w", err)
+		return nil, fmt.Errorf("error extracting RDB binary: %w", err)
 	}
 
+	fmt.Printf("RDB file: %v\n", string(binaryData))
 	fmt.Printf("Successfully received RDB file from master\n")
-	return nil
+	return remainingData, nil
 }
 
 // input: "<len>\r\n<binary-content>"
-func extractBinary(data []byte) ([]byte, error) {
+func extractBinary(data []byte) ([]byte, []byte, error) {
 	// Find the separator between length and content
 	sep := []byte("\r\n")
 	i := bytes.Index(data, sep)
 	if i < 0 {
-		return nil, fmt.Errorf("no CRLF separator found")
+		return nil, nil, fmt.Errorf("no CRLF separator found")
 	}
 
 	if data[0] != '$' {
-		return nil, fmt.Errorf("expected '$', got %q", data[0])
+		return nil, nil, fmt.Errorf("expected '$', got %q", data[0])
 	}
 
 	// Parse length
 	lenStr := string(data[1:i])
 	n, err := strconv.Atoi(lenStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid length %q: %w", lenStr, err)
+		return nil, nil, fmt.Errorf("invalid length %q: %w", lenStr, err)
 	}
 
 	// Extract content
 	content := data[i+len(sep):]
 	if len(content) < n {
-		return nil, fmt.Errorf("data shorter than declared length: have %d, need %d", len(content), n)
+		return nil, nil, fmt.Errorf("data shorter than declared length: have %d, need %d", len(content), n)
 	}
 
-	return content[:n], nil
+	return content[:n], content[n:], nil
 }
 
 // getMasterResponse reads and parses a response from the master

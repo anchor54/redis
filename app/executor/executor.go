@@ -83,6 +83,5 @@ func (e *Executor) handleCommand(cmd *core.Command) {
 	if isWriteCommand(cmd.Command) {
 		replication.GetManager().PropagateCommand(cmd.Command, cmd.Args)
 	}
-
 	cmd.Response <- resp
 }

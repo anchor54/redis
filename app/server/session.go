@@ -25,10 +25,20 @@ func NewSessionHandler(queue *command.Queue) *SessionHandler {
 
 // Handle handles a client connection session
 func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
+	sh.HandleWithInitialData(conn, []byte{})
+}
+
+// HandleWithInitialData handles a client connection session with initial data
+func (sh *SessionHandler) HandleWithInitialData(conn *core.RedisConnection, initialData []byte) {
 	defer conn.Close()
 
 	buf := make([]byte, 4096)
-	buffer := "" // Per-connection buffer to accumulate incomplete data
+	buffer := string(initialData) // Per-connection buffer to accumulate incomplete data
+
+
+	if len(buffer) > 0 {
+		buffer = sh.handleRequests(conn, buffer)
+	}
 
 	for {
 		n, readErr := conn.Read(buf)
@@ -36,25 +46,17 @@ func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
 			if !errors.Is(readErr, io.EOF) {
 				fmt.Printf("Error reading data: %s\n", readErr)
 			}
-			return
+			continue
 		}
 		if n == 0 {
-			return
+			continue
 		}
 
-		if conn.IsMaster() {
-			fmt.Println("master sent: ", string(buf[:n]))
-		}
 		// Append new data to buffer
 		buffer += string(buf[:n])
 		
 		// Parse and handle all complete commands in the buffer
 		buffer = sh.handleRequests(conn, buffer)
-		
-		if conn.IsMaster() {
-			fmt.Printf("Received %d bytes from master\n", n)
-			config.GetInstance().Offset += n
-		}
 	}
 }
 
@@ -72,8 +74,18 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 
 	// Process each parsed command
 	for _, cmd := range commands {
-		fmt.Printf("command: %s, args: %v\n", cmd.Name, cmd.Args)
+		fmt.Printf("role: %s, command: %s, args: %v\n", config.GetInstance().Role, cmd.Name, cmd.Args)
 		sh.router.Route(conn, cmd.Name, cmd.Args)
+
+		cmdArray := []string{cmd.Name}
+		cmdArray = append(cmdArray, cmd.Args...)
+		respCommand := utils.ToArray(cmdArray)
+
+		if conn.IsMaster() {
+			fmt.Printf("Received %d bytes from master for command: %s, args: %v\n", len(respCommand), cmd.Name, cmd.Args)
+			config.GetInstance().Offset += len(respCommand)
+			fmt.Printf("Current Offset: %d\n", config.GetInstance().Offset)
+		}
 	}
 
 	// Return remaining unparsed data
