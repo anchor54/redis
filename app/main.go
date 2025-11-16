@@ -11,12 +11,16 @@ import (
 )
 
 // parseFlags parses command-line flags and returns server configuration
-func parseFlags() (int, config.ServerRole, string) {
+func parseFlags() (int, config.ServerRole, string, string, string) {
 	var port int
 	var masterAddress string
+	var dir string
+	var dbfilename string
 
 	flag.IntVar(&port, "port", 6379, "The port to run the server on.")
 	flag.StringVar(&masterAddress, "replicaof", "", "Master address in format 'host port'")
+	flag.StringVar(&dir, "dir", "", "the path to the directory where the RDB file is stored (example: /tmp/redis-data)")
+	flag.StringVar(&dbfilename, "dbfilename", "", "the path to the directory where the RDB file is stored (example: /tmp/redis-data)")
 	flag.Parse()
 
 	role := config.Master
@@ -24,18 +28,20 @@ func parseFlags() (int, config.ServerRole, string) {
 		role = config.Slave
 	}
 
-	return port, role, masterAddress
+	return port, role, masterAddress, dir, dbfilename
 }
 
 func main() {
 	// Parse command-line flags
-	port, role, masterAddress := parseFlags()
+	port, role, masterAddress, dir, dbfilename := parseFlags()
 
 	// Initialize configuration
 	config.Init(&config.ConfigOptions{
 		Port:          port,
 		Role:          role,
 		MasterAddress: masterAddress,
+		Dir:           dir,
+		DBFilename:    dbfilename,
 	})
 	cfg := config.GetInstance()
 

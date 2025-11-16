@@ -18,12 +18,16 @@ type Config struct {
 	MasterPort    string     // Master port (for replicas only)
 	ReplicationID string     // Replication ID (both master and replica)
 	offset        atomic.Int64 // Replication offset (both master and replica) - thread-safe
+	Dir           string     // Directory to store the RDB file
+	DBFilename    string     // Filename to store the RDB file
 }
 
 type ConfigOptions struct {
 	Port          int
 	Role          ServerRole
 	MasterAddress string
+	Dir           string
+	DBFilename    string
 }
 
 var (
@@ -57,6 +61,14 @@ func Init(opts *ConfigOptions) {
 		if instance.Role == Slave {
 			instance.ReplicationID = "?"
 			instance.offset.Store(-1)
+		}
+
+		if opts.Dir != "" {
+			instance.Dir = opts.Dir
+		}
+
+		if opts.DBFilename != "" {
+			instance.DBFilename = opts.DBFilename
 		}
 	})
 }

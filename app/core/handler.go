@@ -36,10 +36,10 @@ func formatSingleEntry(builder *strings.Builder, entry *ds.Entry) {
 }
 
 /*
-	toStreamEntries converts a slice of stream entries to a RESP array.
- 	Each entry is represented as an array of 2 elements:
-		- Element 0: The entry ID as a bulk string
-		- Element 1: An array of field key-value pairs (flattened)
+		toStreamEntries converts a slice of stream entries to a RESP array.
+	 	Each entry is represented as an array of 2 elements:
+			- Element 0: The entry ID as a bulk string
+			- Element 1: An array of field key-value pairs (flattened)
 */
 func toStreamEntries(entries []*ds.Entry) string {
 	if entries == nil {
@@ -51,7 +51,7 @@ func toStreamEntries(entries []*ds.Entry) string {
 	builder.WriteString("*")
 	builder.WriteString(strconv.Itoa(len(entries)))
 	builder.WriteString("\r\n")
-	
+
 	for _, entry := range entries {
 		formatSingleEntry(&builder, entry)
 	}
@@ -65,11 +65,11 @@ type StreamKeyEntries struct {
 }
 
 /*
-	toStreamEntriesByKey converts a slice of stream key-entry pairs into a RESP array.
-	- The order of the input slice is preserved in the output.
-	- Each element in the top-level array is an array of 2 elements: [key, entries_array].
-	- The entries_array is formatted the same way as toStreamEntries.
-	- Format: *N\r\n (*2\r\n$X\r\n<key>\r\n*M\r\n<entries>...) ...
+toStreamEntriesByKey converts a slice of stream key-entry pairs into a RESP array.
+- The order of the input slice is preserved in the output.
+- Each element in the top-level array is an array of 2 elements: [key, entries_array].
+- The entries_array is formatted the same way as toStreamEntries.
+- Format: *N\r\n (*2\r\n$X\r\n<key>\r\n*M\r\n<entries>...) ...
 */
 func toStreamEntriesByKey(streams []StreamKeyEntries) string {
 	if streams == nil {
@@ -78,12 +78,12 @@ func toStreamEntriesByKey(streams []StreamKeyEntries) string {
 
 	var builder strings.Builder
 	builder.Grow(512) // Pre-allocate reasonable size for multiple streams
-	
+
 	// Top-level array with one element per stream key
 	builder.WriteString("*")
 	builder.WriteString(strconv.Itoa(len(streams)))
 	builder.WriteString("\r\n")
-	
+
 	for _, stream := range streams {
 		// Each stream is an array of 2 elements: [key, entries_array]
 		builder.WriteString("*2\r\n")
@@ -142,8 +142,8 @@ func loadStreams(streamKeys []string) ([]*ds.Stream, error) {
 	db := store.GetInstance()
 	streams := make([]*ds.Stream, len(streamKeys))
 	for i, key := range streamKeys {
-		stream, ok := db.LoadOrStoreStream(key)
-		if !ok || stream == nil {
+		stream, _ := db.LoadOrStoreStream(key)
+		if stream == nil {
 			return nil, errors.New("failed to load or create stream")
 		}
 		streams[i] = stream
@@ -177,7 +177,7 @@ func readEntriesFromStreams(streams []*ds.Stream, streamKeys []string, startIDs 
 func readEntriesFromStream(stream *ds.Stream, startIDStr string) ([]*ds.Entry, error) {
 	lastID := stream.GetLastStreamID()
 	logger.Debug("Reading stream entries", "startID", startIDStr, "lastID", lastID)
-	
+
 	startID, err := ds.ParseStartStreamID(startIDStr, lastID)
 	if err != nil {
 		logger.Error("Failed to parse start stream ID", "startID", startIDStr, "error", err)
@@ -223,7 +223,7 @@ func setHandler(cmd *Command) (int, []string, string, error) {
 
 	key, value := args[0], args[1]
 	kvObj := ds.NewStringObject(value)
-	
+
 	db := store.GetInstance()
 	db.Store(key, &kvObj)
 
@@ -250,7 +250,7 @@ func getHandler(cmd *Command) (int, []string, string, error) {
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
 	}
-	
+
 	db := store.GetInstance()
 	val, ok := db.GetString(args[0])
 	if !ok {
@@ -267,10 +267,10 @@ func lpushHandler(cmd *Command) (int, []string, string, error) {
 
 	key, value := args[0], args[1:]
 	value = utils.Reverse(value)
-	
+
 	db := store.GetInstance()
-	dq, ok := db.LoadOrStoreList(key)
-	if !ok || dq == nil {
+	dq, _ := db.LoadOrStoreList(key)
+	if dq == nil {
 		return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 	}
 
@@ -285,10 +285,10 @@ func rpushHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key, value := args[0], args[1:]
-	
+
 	db := store.GetInstance()
-	dq, ok := db.LoadOrStoreList(key)
-	if !ok || dq == nil {
+	dq, _ := db.LoadOrStoreList(key)
+	if dq == nil {
 		return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 	}
 
@@ -329,7 +329,7 @@ func llenHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	
+
 	db := store.GetInstance()
 	list, ok := db.GetList(key)
 	if !ok {
@@ -346,7 +346,7 @@ func lpopHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	
+
 	db := store.GetInstance()
 	dq, ok := db.GetList(key)
 	if !ok {
@@ -386,8 +386,8 @@ func blpopHandler(cmd *Command) (int, []string, string, error) {
 
 	db := store.GetInstance()
 	for _, key := range keys {
-		dq, ok := db.LoadOrStoreList(key)
-		if !ok || dq == nil {
+		dq, _ := db.LoadOrStoreList(key)
+		if dq == nil {
 			return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 		}
 
@@ -411,7 +411,7 @@ func typeHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	
+
 	db := store.GetInstance()
 	val, ok := db.GetValue(key)
 	if !ok {
@@ -440,11 +440,11 @@ func xaddHandler(cmd *Command) (int, []string, string, error) {
 	fields := args[2:]
 
 	db := store.GetInstance()
-	stream, ok := db.LoadOrStoreStream(key)
-	if !ok || stream == nil {
+	stream, _ := db.LoadOrStoreStream(key)
+	if stream == nil {
 		return -1, []string{}, "", errors.New("failed to load or create stream")
 	}
-	
+
 	entry, err := stream.CreateEntry(entryID, fields...)
 	if err != nil {
 		return -1, []string{}, "", err
@@ -462,13 +462,13 @@ func xrangeHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	
+
 	db := store.GetInstance()
-	stream, ok := db.LoadOrStoreStream(key)
-	if !ok || stream == nil {
+	stream, _ := db.LoadOrStoreStream(key)
+	if stream == nil {
 		return -1, []string{}, "", errors.New("failed to load or create stream")
 	}
-	
+
 	lastID := stream.GetLastStreamID()
 	startID, err := ds.ParseStartStreamID(args[1], lastID)
 	if err != nil {
@@ -498,7 +498,7 @@ func xreadHandler(cmd *Command) (int, []string, string, error) {
 	if err != nil {
 		return -1, []string{}, "", err
 	}
-	
+
 	streamEntries, err := readEntriesFromStreams(streams, streamKeys, startIDs)
 
 	// all streams are empty and timeout is specified => need to block
@@ -519,10 +519,10 @@ func xreadHandler(cmd *Command) (int, []string, string, error) {
 		}
 		newArgs = append(newArgs, streamKeys...)
 		newArgs = append(newArgs, lastIDs...)
-		
+
 		// replace the original args with the new args
 		cmd.Args = newArgs
-		
+
 		return timeout, streamKeys, utils.ToArray(nil), nil
 	}
 
@@ -543,7 +543,7 @@ func incrHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	
+
 	db := store.GetInstance()
 	count, err := db.IncrementString(key)
 	if err != nil {
@@ -564,6 +564,22 @@ func infoHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToNullBulkString(), nil
 }
 
+func configHandler(cmd *Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 2 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[1]
+	switch key {
+	case "dir":
+		return -1, []string{}, utils.ToArray([]string{key, config.GetInstance().Dir}), nil
+	case "dbfilename":
+		return -1, []string{}, utils.ToArray([]string{key, config.GetInstance().DBFilename}), nil
+	}
+	return -1, []string{}, "", ErrInvalidArguments
+}
+
 var Handlers = map[string]func(*Command) (int, []string, string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
@@ -580,5 +596,6 @@ var Handlers = map[string]func(*Command) (int, []string, string, error){
 	"XRANGE": xrangeHandler,
 	"XREAD":  xreadHandler,
 	"INCR":   incrHandler,
-	"INFO": infoHandler,
+	"INFO":   infoHandler,
+	"CONFIG": configHandler,
 }
