@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/replication"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -55,7 +57,7 @@ func (cr *CommandRouter) Route(conn *core.RedisConnection, cmdName string, args 
 	// Check if it's a session-level command
 	if handler, exists := cr.sessionHandlers[cmdName]; exists {
 		if handlerErr := handler(conn, args, cr.queue); handlerErr != nil {
-			conn.SendResponse(utils.ToError(handlerErr.Error()))
+			conn.SendError(handlerErr.Error())
 		}
 		return
 	}
@@ -73,7 +75,7 @@ func (cr *CommandRouter) isTransactionControlCommand(cmdName string) bool {
 func (cr *CommandRouter) queueCommand(conn *core.RedisConnection, cmdName string, args []string) {
 	queued, queueErr := conn.EnqueueCommand(command.CreateCommand(cmdName, args))
 	if queueErr != nil {
-		conn.SendResponse(utils.ToError(queueErr.Error()))
+		conn.SendError(queueErr.Error())
 		return
 	}
 	if queued {
@@ -160,10 +162,11 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 		}
 
 	case "getack":
-		fmt.Printf("Sending ACK to master, offset: %d\n", config.GetInstance().Offset)
+		offset := config.GetInstance().GetOffset()
+		logger.Debug("Sending ACK to master", "offset", offset)
 		conn.SetSuppressResponse(false)
 		conn.SendResponse(utils.ToArray(
-			[]string{"REPLCONF", "ACK", strconv.Itoa(config.GetInstance().Offset)},
+			[]string{"REPLCONF", "ACK", strconv.Itoa(offset)},
 		))
 		conn.SetSuppressResponse(true)
 		return nil
@@ -175,7 +178,7 @@ func (cr *CommandRouter) handleReplconf(conn *core.RedisConnection, args []strin
 			return err
 		}
 		replicaInfo.LastAckOffset = offset
-		fmt.Printf("Replica %s offset: %d\n", conn.GetAddress(), offset)
+		logger.Debug("Replica ACK received", "address", conn.GetAddress(), "offset", offset)
 		// For ACK we don't send any response back
 		return nil
 	}
@@ -194,11 +197,15 @@ func (cr *CommandRouter) handlePsync(conn *core.RedisConnection, args []string, 
 		return err
 	}
 
-	config := config.GetInstance()
-	if replicationID != config.ReplicationID {
-		conn.SendResponse(utils.ToSimpleString("FULLRESYNC " + config.ReplicationID + " 0"))
-		hexData, err := os.ReadFile("app/data/dump.rdb")
+	cfg := config.GetInstance()
+	if replicationID != cfg.ReplicationID {
+		conn.SendResponse(utils.ToSimpleString("FULLRESYNC " + cfg.ReplicationID + " 0"))
+		
+		// Get RDB file path relative to working directory
+		rdbPath := filepath.Join("app", "data", "dump.rdb")
+		hexData, err := os.ReadFile(rdbPath)
 		if err != nil {
+			logger.Error("Failed to read RDB file", "path", rdbPath, "error", err)
 			return err
 		}
 		// Decode hex string to bytes

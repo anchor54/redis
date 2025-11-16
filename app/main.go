@@ -5,6 +5,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/executor"
 	"github.com/codecrafters-io/redis-starter-go/app/server"
 )
@@ -39,7 +40,7 @@ func main() {
 	cfg := config.GetInstance()
 
 	// Create command queue
-	queue := command.NewQueue(1000, 1000)
+	queue := command.NewQueue(constants.DefaultCommandQueueSize, constants.DefaultTransactionQueueSize)
 
 	// Start command executor in background
 	exec := executor.NewExecutor(queue)

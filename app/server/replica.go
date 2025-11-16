@@ -12,7 +12,9 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -32,18 +34,20 @@ func NewReplicaServer(cfg *config.Config, queue *command.Queue) *ReplicaServer {
 
 // Start starts the replica server
 func (rs *ReplicaServer) Start() error {
-	localAddress := fmt.Sprintf("%s:%d", rs.config.Host, rs.config.Port)
+	localAddress := net.JoinHostPort(rs.config.Host, strconv.Itoa(rs.config.Port))
 	listener, err := net.Listen("tcp", localAddress)
 	if err != nil {
-		fmt.Printf("Error listening on %s: %s\n", localAddress, err)
+		logger.Error("Error listening", "address", localAddress, "error", err)
 		return err
 	}
+
+	logger.Info("Replica server listening", "address", localAddress)
 
 	// 1) Kick off master handshake in a separate goroutine
 	go func() {
 		masterConn, remainingData, err := rs.connectToMaster()
 		if err != nil {
-			fmt.Printf("Error connecting to master: %s\n", err)
+			logger.Error("Error connecting to master", "error", err)
 			return
 		}
 		defer masterConn.Close()
@@ -63,10 +67,11 @@ func (rs *ReplicaServer) handleConnection(listener *net.Listener) {
 	for {
 		conn, err := (*listener).Accept()
 		if err != nil {
-			fmt.Printf("Error accepting connection: %s\n", err)
+			logger.Error("Error accepting connection", "error", err)
 			continue
 		}
 
+		logger.Debug("New connection accepted", "remote", conn.RemoteAddr())
 		go rs.sessionHandler.Handle(core.NewRedisConnection(conn))
 	}
 }
@@ -81,9 +86,10 @@ func (rs *ReplicaServer) Run() {
 // connectToMaster establishes a connection to the master server
 func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error) {
 	masterAddress := net.JoinHostPort(rs.config.MasterHost, rs.config.MasterPort)
+	logger.Info("Connecting to master", "address", masterAddress)
 	conn, err := net.DialTimeout("tcp", masterAddress, 10*time.Second)
 	if err != nil {
-		fmt.Printf("Error connecting to master at %s: %s\n", masterAddress, err)
+		logger.Error("Error connecting to master", "address", masterAddress, "error", err)
 		return nil, nil, err
 	}
 
@@ -97,31 +103,31 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error
 	masterConn.MarkAsMaster()
 	response, err := rs.getMasterResponse(masterConn)
 	if err != nil {
-		fmt.Printf("Error getting response from master: %s\n", err)
+		logger.Error("Error getting response from master", "error", err)
 		return nil, nil, err
 	}
 
 	if response != "PONG" {
-		fmt.Printf("Unexpected response from master: %s\n", response)
+		logger.Error("Unexpected response from master", "response", response)
 		return nil, nil, errors.New("unexpected response from master")
 	}
 
-	fmt.Printf("Connected to master\n")
+	logger.Info("Connected to master, starting handshake")
 
 	// Send REPLCONF commands
 	if err := rs.sendReplconfCommands(masterConn); err != nil {
-		fmt.Printf("Error during REPLCONF: %s\n", err)
+		logger.Error("Error during REPLCONF", "error", err)
 		return nil, nil, err
 	}
 
 	// Send PSYNC
 	remainingData, err := rs.sendPsync(masterConn)
 	if err != nil {
-		fmt.Printf("Error sending PSYNC: %s\n", err)
+		logger.Error("Error sending PSYNC", "error", err)
 		return nil, nil, err
 	}
 
-	fmt.Printf("Handshake with master complete\n")
+	logger.Info("Handshake with master complete")
 	return masterConn, remainingData, nil
 }
 
@@ -158,11 +164,11 @@ func (rs *ReplicaServer) sendReplconfCommands(masterConn *core.RedisConnection) 
 
 func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) ([]byte, error) {
 	// Use replication ID and offset from config
-	psync := utils.ToArray([]string{"PSYNC", rs.config.ReplicationID, strconv.Itoa(rs.config.Offset)})
+	psync := utils.ToArray([]string{"PSYNC", rs.config.ReplicationID, strconv.Itoa(rs.config.GetOffset())})
 	conn.SendResponse(psync)
 
 	// Read response - may contain FULLRESYNC and start of RDB in one buffer
-	buff := make([]byte, 4096)
+	buff := make([]byte, constants.DefaultBufferSize)
 	n, err := conn.Read(buff)
 	if err != nil {
 		return nil, fmt.Errorf("error reading PSYNC response: %w", err)
@@ -199,9 +205,9 @@ func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) ([]byte, error) {
 		return nil, fmt.Errorf("error parsing PSYNC offset: %w", err)
 	}
 
-	config := config.GetInstance()
-	config.ReplicationID = replicationID
-	config.Offset = offset
+	cfg := config.GetInstance()
+	cfg.ReplicationID = replicationID
+	cfg.SetOffset(offset)
 
 	// The rest of the buffer contains the RDB bulk string (format: $<len>\r\n<binary-data>)
 	remainingData := data[crlfIdx+2:]
@@ -223,8 +229,8 @@ func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) ([]byte, error) {
 		return nil, fmt.Errorf("error extracting RDB binary: %w", err)
 	}
 
-	fmt.Printf("RDB file: %v\n", string(binaryData))
-	fmt.Printf("Successfully received RDB file from master\n")
+	logger.Debug("Received RDB file from master", "size", len(binaryData))
+	logger.Info("Successfully received RDB file from master")
 	return remainingData, nil
 }
 
@@ -259,7 +265,7 @@ func extractBinary(data []byte) ([]byte, []byte, error) {
 
 // getMasterResponse reads and parses a response from the master
 func (rs *ReplicaServer) getMasterResponse(conn *core.RedisConnection) (string, error) {
-	buff := make([]byte, 1024)
+	buff := make([]byte, constants.SmallBufferSize)
 	n, err := conn.Read(buff)
 	if err != nil {
 		return "", err
@@ -272,7 +278,7 @@ func (rs *ReplicaServer) getMasterResponse(conn *core.RedisConnection) (string, 
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("Response from master: %s\n", response)
+	logger.Debug("Response from master", "response", response)
 
 	return response, nil
 }

@@ -1,10 +1,10 @@
 package executor
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -49,20 +49,21 @@ func (bcm *BlockingCommandManager) AddWaitingCommand(timeout int, keys []string,
 func (bcm *BlockingCommandManager) UnblockCommandsWaitingForKey(keys []string) {
 	for _, key := range keys {
 		blockedCommands := bcm.blockingCommands[key]
-		fmt.Printf("unblocking commands for key: %s, blocked commands: %v\n", key, blockedCommands)
+		logger.Debug("Unblocking commands", "key", key, "count", len(blockedCommands))
 		lastExecutedCommand := -1
 		for i, blockedCmd := range blockedCommands {
 			command := blockedCmd.Command
-			fmt.Printf("unblocking command: %s, args: %v\n", command.Command, command.Args)
+			logger.Debug("Executing blocked command", "command", command.Command, "args", command.Args)
 			handler, ok := core.Handlers[command.Command]
 			if !ok {
-				command.Response <- utils.ToError(fmt.Sprintf("unknown command: %s", command.Command))
+				logger.Warn("Unknown command in blocked queue", "command", command.Command)
+				command.Response <- utils.ToError("unknown command: " + command.Command)
 				continue
 			}
 			// Here we assume that the command won't unblock another command (causing a chain reaction)
 			// and so we ignore the keys that were set in its execution
 			timeout, _, resp, err := handler(command)
-			fmt.Printf("Blocked command => command: %s, timeout: %d, response: %s, error: %v\n", command.Command, timeout, resp, err)
+			logger.Debug("Blocked command executed", "command", command.Command, "timeout", timeout, "error", err)
 			if timeout >= 0 {
 				break
 			}

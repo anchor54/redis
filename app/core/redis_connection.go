@@ -1,10 +1,10 @@
 package core
 
 import (
-	"fmt"
 	"net"
 
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -67,10 +67,15 @@ func (conn *RedisConnection) SendResponse(message string) {
 	if conn.suppressResponse {
 		return
 	}
-	_, err := conn.conn.Write([]byte(message))
-	if err != nil {
-		fmt.Printf("Error writing response: %s\n", err)
+	_, writeErr := conn.conn.Write([]byte(message))
+	if writeErr != nil {
+		logger.Error("Error writing response", "error", writeErr, "address", conn.GetAddress())
 	}
+}
+
+// SendError sends an error response to the client
+func (conn *RedisConnection) SendError(errMsg string) {
+	conn.SendResponse(utils.ToError(errMsg))
 }
 
 func (conn *RedisConnection) IsInTransaction() bool {
@@ -86,7 +91,7 @@ func (conn *RedisConnection) StartTransaction() (string, error) {
 		return "", err.ErrAlreadyInTransaction
 	}
 	conn.inTransaction = true
-	return utils.ToSimpleString(OKResponse), nil
+	return utils.ToSimpleString("OK"), nil
 }
 
 func (conn *RedisConnection) EndTransaction() {
@@ -99,7 +104,7 @@ func (conn *RedisConnection) DiscardTransaction() (string, error) {
 	}
 	conn.inTransaction = false
 	conn.queuedCommands = make([]Command, 0)
-	return utils.ToSimpleString(OKResponse), nil
+	return utils.ToSimpleString("OK"), nil
 }
 
 func (conn *RedisConnection) SetSuppressResponse(suppress bool) {

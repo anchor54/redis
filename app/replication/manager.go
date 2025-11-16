@@ -80,9 +80,9 @@ func (m *Manager) PropagateCommand(cmdName string, args []string) {
 	for _, replica := range eligibleReplicas {
 		replica.Connection.SendResponse(respCommand)
 	}
-	
+
 	// Increment the master offset
-	config.GetInstance().Offset += len(respCommand)
+	config.GetInstance().AddOffset(len(respCommand))
 }
 
 func (m *Manager) WaitForReplicas(minReplicasToWaitFor int, timeout int) int {
@@ -92,11 +92,10 @@ func (m *Manager) WaitForReplicas(minReplicasToWaitFor int, timeout int) int {
 		return 0
 	}
 
-	if config.GetInstance().Offset == 0 {
+	currentOffset := config.GetInstance().GetOffset()
+	if currentOffset == 0 {
 		return m.GetReplicaCount()
 	}
-
-	currentOffset := config.GetInstance().Offset
 	deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
 
 	for {

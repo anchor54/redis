@@ -1,13 +1,14 @@
 package server
 
 import (
-	"fmt"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 )
 
 // MasterServer represents a Redis master server
@@ -26,23 +27,24 @@ func NewMasterServer(cfg *config.Config, queue *command.Queue) *MasterServer {
 
 // Start starts the master server
 func (ms *MasterServer) Start() error {
-	localAddress := fmt.Sprintf("%s:%d", ms.config.Host, ms.config.Port)
+	localAddress := net.JoinHostPort(ms.config.Host, strconv.Itoa(ms.config.Port))
 	listener, err := net.Listen("tcp", localAddress)
 	if err != nil {
-		fmt.Printf("Error listening on %s: %s\n", localAddress, err)
+		logger.Error("Error listening", "address", localAddress, "error", err)
 		return err
 	}
 	defer listener.Close()
 
-	fmt.Printf("Master server listening on %s\n", localAddress)
+	logger.Info("Master server listening", "address", localAddress)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("Error accepting connection: %s\n", err)
+			logger.Error("Error accepting connection", "error", err)
 			continue
 		}
 
+		logger.Debug("New connection accepted", "remote", conn.RemoteAddr())
 		go ms.sessionHandler.Handle(core.NewRedisConnection(conn))
 	}
 }

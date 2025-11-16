@@ -1,22 +1,17 @@
 package executor
 
 import (
-	"fmt"
-
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/replication"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
-// writeCommands is a set of commands that modify the database
-var writeCommands = map[string]bool{
-	"SET":   true,
-	"LPUSH": true,
-	"RPUSH": true,
-	"LPOP":  true,
-	"XADD":  true,
-	"INCR":  true,
+// isWriteCommand checks if a command modifies the database
+func isWriteCommand(cmdName string) bool {
+	return constants.WriteCommands[cmdName]
 }
 
 // Executor handles command and transaction execution
@@ -48,21 +43,17 @@ func (e *Executor) Start() {
 	}
 }
 
-// isWriteCommand checks if a command modifies the database
-func isWriteCommand(cmdName string) bool {
-	return writeCommands[cmdName]
-}
-
 // handleCommand processes a single command
 func (e *Executor) handleCommand(cmd *core.Command) {
 	handler, ok := core.Handlers[cmd.Command]
 	if !ok {
-		cmd.Response <- utils.ToError(fmt.Sprintf("unknown command: %s", cmd.Command))
+		logger.Warn("Unknown command", "command", cmd.Command)
+		cmd.Response <- utils.ToError("unknown command: " + cmd.Command)
 		return
 	}
 
 	timeout, keys, resp, err := handler(cmd)
-	fmt.Printf("command: %s, timeout: %d, setKeys: %v, response: %s, error: %v\n", cmd.Command, timeout, keys, resp, err)
+	logger.Debug("Command executed", "command", cmd.Command, "timeout", timeout, "keys", keys, "error", err)
 
 	// if the command is blocking, add it to the blocking commands map
 	if timeout >= 0 {

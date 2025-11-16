@@ -1,10 +1,9 @@
 package executor
 
 import (
-	"fmt"
-
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -28,7 +27,8 @@ func (te *TransactionExecutor) Execute(trans *command.Transaction) {
 	for i, cmd := range trans.Commands {
 		handler, ok := core.Handlers[cmd.Command]
 		if !ok {
-			fmt.Printf("unknown command: %s\n", cmd.Command)
+			logger.Warn("Unknown command in transaction", "command", cmd.Command)
+			result[i] = utils.ToError("unknown command: " + cmd.Command)
 			continue
 		}
 

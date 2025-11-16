@@ -2,50 +2,60 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
 var (
 	ErrInvalidArguments = errors.New("invalid arguments")
-	OKResponse          = "OK"
-	db					= store.GetInstance()
 )
 
 // -------------------------- UTILS --------------------------
+
+// formatSingleEntry formats a single stream entry as RESP array [ID, [fields...]]
+func formatSingleEntry(builder *strings.Builder, entry *ds.Entry) {
+	// Each entry is an array of 2 elements: [ID, fields_array]
+	builder.WriteString("*2\r\n")
+	// Element 0: ID as bulk string
+	builder.WriteString(utils.ToBulkString(entry.ID.String()))
+	// Element 1: Fields as array (key-value pairs flattened)
+	fields := make([]string, 0, len(entry.Fields)*2)
+	for key, value := range entry.Fields {
+		fields = append(fields, key, value)
+	}
+	builder.WriteString(utils.ToArray(fields))
+}
+
 /*
 	toStreamEntries converts a slice of stream entries to a RESP array.
  	Each entry is represented as an array of 2 elements:
 		- Element 0: The entry ID as a bulk string
 		- Element 1: An array of field key-value pairs (flattened)
 */
-   func toStreamEntries(entries []*ds.Entry) string {
+func toStreamEntries(entries []*ds.Entry) string {
 	if entries == nil {
 		return "*-1\r\n"
 	}
 
-	result := fmt.Sprintf("*%d\r\n", len(entries))
+	var builder strings.Builder
+	builder.Grow(256) // Pre-allocate reasonable size
+	builder.WriteString("*")
+	builder.WriteString(strconv.Itoa(len(entries)))
+	builder.WriteString("\r\n")
+	
 	for _, entry := range entries {
-		// Each entry is an array of 2 elements: [ID, fields_array]
-		result += "*2\r\n"
-		// Element 0: ID as bulk string
-		result += utils.ToBulkString(entry.ID.String())
-		// Element 1: Fields as array (key-value pairs flattened)
-		fields := make([]string, 0, len(entry.Fields)*2)
-		for key, value := range entry.Fields {
-			fields = append(fields, key, value)
-		}
-		result += utils.ToArray(fields)
+		formatSingleEntry(&builder, entry)
 	}
-	return result
+	return builder.String()
 }
 
 // StreamKeyEntries represents a stream key and its associated entries
@@ -66,33 +76,32 @@ func toStreamEntriesByKey(streams []StreamKeyEntries) string {
 		return "*-1\r\n"
 	}
 
+	var builder strings.Builder
+	builder.Grow(512) // Pre-allocate reasonable size for multiple streams
+	
 	// Top-level array with one element per stream key
-	result := fmt.Sprintf("*%d\r\n", len(streams))
+	builder.WriteString("*")
+	builder.WriteString(strconv.Itoa(len(streams)))
+	builder.WriteString("\r\n")
+	
 	for _, stream := range streams {
 		// Each stream is an array of 2 elements: [key, entries_array]
-		result += "*2\r\n"
+		builder.WriteString("*2\r\n")
 		// Element 0: Key as bulk string
-		result += utils.ToBulkString(stream.Key)
-		// Element 1: Entries array (formatted like ToStreamEntries)
+		builder.WriteString(utils.ToBulkString(stream.Key))
+		// Element 1: Entries array
 		if stream.Entries == nil {
-			result += "*-1\r\n"
+			builder.WriteString("*-1\r\n")
 		} else {
-			result += fmt.Sprintf("*%d\r\n", len(stream.Entries))
+			builder.WriteString("*")
+			builder.WriteString(strconv.Itoa(len(stream.Entries)))
+			builder.WriteString("\r\n")
 			for _, entry := range stream.Entries {
-				// Each entry is an array of 2 elements: [ID, fields_array]
-				result += "*2\r\n"
-				// Element 0: ID as bulk string
-				result += utils.ToBulkString(entry.ID.String())
-				// Element 1: Fields as array (key-value pairs flattened)
-				fields := make([]string, 0, len(entry.Fields)*2)
-				for fieldKey, fieldValue := range entry.Fields {
-					fields = append(fields, fieldKey, fieldValue)
-				}
-				result += utils.ToArray(fields)
+				formatSingleEntry(&builder, entry)
 			}
 		}
 	}
-	return result
+	return builder.String()
 }
 
 // parseXReadArgs parses XREAD command arguments and returns timeout, stream keys, and start IDs.
@@ -129,13 +138,17 @@ func parseXReadArgs(args []string) (timeout int, streamKeys []string, startIDs [
 }
 
 // loadStreams loads or creates streams for the given keys.
-func loadStreams(streamKeys []string) []*ds.Stream {
+func loadStreams(streamKeys []string) ([]*ds.Stream, error) {
+	db := store.GetInstance()
 	streams := make([]*ds.Stream, len(streamKeys))
 	for i, key := range streamKeys {
-		stream, _ := db.LoadOrStoreStream(key)
+		stream, ok := db.LoadOrStoreStream(key)
+		if !ok || stream == nil {
+			return nil, errors.New("failed to load or create stream")
+		}
 		streams[i] = stream
 	}
-	return streams
+	return streams, nil
 }
 
 // readEntriesFromStreams reads entries from multiple streams based on start IDs.
@@ -144,7 +157,7 @@ func readEntriesFromStreams(streams []*ds.Stream, streamKeys []string, startIDs 
 	streamEntries := make([]StreamKeyEntries, 0, len(streams))
 
 	for i, stream := range streams {
-		fmt.Printf("stream %s: %s\n", streamKeys[i], stream)
+		logger.Debug("Reading from stream", "key", streamKeys[i], "stream", stream.String())
 		entries, err := readEntriesFromStream(stream, startIDs[i])
 		if err != nil {
 			return nil, err
@@ -162,27 +175,25 @@ func readEntriesFromStreams(streams []*ds.Stream, streamKeys []string, startIDs 
 
 // readEntriesFromStream reads entries from a single stream.
 func readEntriesFromStream(stream *ds.Stream, startIDStr string) ([]*ds.Entry, error) {
-	fmt.Printf("reading stream from %s\n", startIDStr)
 	lastID := stream.GetLastStreamID()
-	fmt.Printf("lastID: %s\n", lastID)
-	startID, err := ds.ParseStartStreamID(startIDStr, lastID)
-	fmt.Printf("startID: %s, error: %v\n", startID, err)
+	logger.Debug("Reading stream entries", "startID", startIDStr, "lastID", lastID)
 	
+	startID, err := ds.ParseStartStreamID(startIDStr, lastID)
 	if err != nil {
+		logger.Error("Failed to parse start stream ID", "startID", startIDStr, "error", err)
 		return nil, err
 	}
-
 
 	// Increment sequence to get entries after the start ID
 	startID.Seq++
 
 	endID, err := ds.ParseEndStreamID("+")
-	fmt.Printf("endID: %s, error: %v\n", endID, err)
 	if err != nil {
+		logger.Error("Failed to parse end stream ID", "error", err)
 		return nil, err
 	}
 
-	fmt.Printf("reading stream from %s to %s\n", startID, endID)
+	logger.Debug("Scanning stream range", "from", startID, "to", endID)
 	entries, err := stream.RangeScan(startID, endID)
 	if err != nil {
 		return nil, err
@@ -212,6 +223,8 @@ func setHandler(cmd *Command) (int, []string, string, error) {
 
 	key, value := args[0], args[1]
 	kvObj := ds.NewStringObject(value)
+	
+	db := store.GetInstance()
 	db.Store(key, &kvObj)
 
 	// Check if expiry is set
@@ -229,7 +242,7 @@ func setHandler(cmd *Command) (int, []string, string, error) {
 		}
 	}
 
-	return -1, []string{key}, utils.ToSimpleString(OKResponse), nil
+	return -1, []string{key}, utils.ToSimpleString(constants.OKResponse), nil
 }
 
 func getHandler(cmd *Command) (int, []string, string, error) {
@@ -237,6 +250,8 @@ func getHandler(cmd *Command) (int, []string, string, error) {
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
 	}
+	
+	db := store.GetInstance()
 	val, ok := db.GetString(args[0])
 	if !ok {
 		return -1, []string{}, utils.ToNullBulkString(), nil
@@ -252,9 +267,10 @@ func lpushHandler(cmd *Command) (int, []string, string, error) {
 
 	key, value := args[0], args[1:]
 	value = utils.Reverse(value)
-	dq, _ := db.LoadOrStoreList(key)
-
-	if dq == nil {
+	
+	db := store.GetInstance()
+	dq, ok := db.LoadOrStoreList(key)
+	if !ok || dq == nil {
 		return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 	}
 
@@ -269,9 +285,10 @@ func rpushHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key, value := args[0], args[1:]
-	dq, _ := db.LoadOrStoreList(key)
-
-	if dq == nil {
+	
+	db := store.GetInstance()
+	dq, ok := db.LoadOrStoreList(key)
+	if !ok || dq == nil {
 		return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 	}
 
@@ -296,6 +313,7 @@ func lrangeHandler(cmd *Command) (int, []string, string, error) {
 		return -1, []string{}, "", err
 	}
 
+	db := store.GetInstance()
 	list, ok := db.GetList(key)
 	if !ok {
 		return -1, []string{}, utils.ToArray(make([]string, 0)), nil
@@ -311,6 +329,8 @@ func llenHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
+	
+	db := store.GetInstance()
 	list, ok := db.GetList(key)
 	if !ok {
 		return -1, []string{}, utils.ToRespInt(0), nil
@@ -326,13 +346,18 @@ func lpopHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
+	
+	db := store.GetInstance()
 	dq, ok := db.GetList(key)
 	if !ok {
 		return -1, []string{}, utils.ToNullBulkString(), nil
 	}
 
 	if len(args) > 1 {
-		nElemsToRemove, _ := strconv.Atoi(args[1])
+		nElemsToRemove, err := strconv.Atoi(args[1])
+		if err != nil {
+			return -1, []string{}, "", err
+		}
 		removedElements, nRemoved := dq.TryPopN(nElemsToRemove)
 		if nRemoved == 0 {
 			return -1, []string{}, utils.ToNullBulkString(), nil
@@ -354,12 +379,15 @@ func blpopHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	keys := args[:len(args)-1]
-	timeout, _ := strconv.ParseFloat(args[len(args)-1], 32)
+	timeout, parseErr := strconv.ParseFloat(args[len(args)-1], 32)
+	if parseErr != nil {
+		return -1, []string{}, "", parseErr
+	}
 
+	db := store.GetInstance()
 	for _, key := range keys {
-		dq, _ := db.LoadOrStoreList(key)
-
-		if dq == nil {
+		dq, ok := db.LoadOrStoreList(key)
+		if !ok || dq == nil {
 			return -1, []string{}, "", err.ErrFailedToLoadOrStoreList
 		}
 
@@ -383,6 +411,8 @@ func typeHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
+	
+	db := store.GetInstance()
 	val, ok := db.GetValue(key)
 	if !ok {
 		return -1, []string{}, utils.ToSimpleString("none"), nil
@@ -409,7 +439,12 @@ func xaddHandler(cmd *Command) (int, []string, string, error) {
 	key, entryID := args[0], args[1]
 	fields := args[2:]
 
-	stream, _ := db.LoadOrStoreStream(key)
+	db := store.GetInstance()
+	stream, ok := db.LoadOrStoreStream(key)
+	if !ok || stream == nil {
+		return -1, []string{}, "", errors.New("failed to load or create stream")
+	}
+	
 	entry, err := stream.CreateEntry(entryID, fields...)
 	if err != nil {
 		return -1, []string{}, "", err
@@ -427,7 +462,13 @@ func xrangeHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	stream, _ := db.LoadOrStoreStream(key)
+	
+	db := store.GetInstance()
+	stream, ok := db.LoadOrStoreStream(key)
+	if !ok || stream == nil {
+		return -1, []string{}, "", errors.New("failed to load or create stream")
+	}
+	
 	lastID := stream.GetLastStreamID()
 	startID, err := ds.ParseStartStreamID(args[1], lastID)
 	if err != nil {
@@ -453,7 +494,11 @@ func xreadHandler(cmd *Command) (int, []string, string, error) {
 		return -1, []string{}, "", err
 	}
 
-	streams := loadStreams(streamKeys)
+	streams, err := loadStreams(streamKeys)
+	if err != nil {
+		return -1, []string{}, "", err
+	}
+	
 	streamEntries, err := readEntriesFromStreams(streams, streamKeys, startIDs)
 
 	// all streams are empty and timeout is specified => need to block
@@ -498,6 +543,8 @@ func incrHandler(cmd *Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
+	
+	db := store.GetInstance()
 	count, err := db.IncrementString(key)
 	if err != nil {
 		return -1, []string{}, "", err

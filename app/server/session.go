@@ -2,12 +2,13 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -32,7 +33,7 @@ func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
 func (sh *SessionHandler) HandleWithInitialData(conn *core.RedisConnection, initialData []byte) {
 	defer conn.Close()
 
-	buf := make([]byte, 4096)
+	buf := make([]byte, constants.DefaultBufferSize)
 	buffer := string(initialData) // Per-connection buffer to accumulate incomplete data
 
 
@@ -43,10 +44,13 @@ func (sh *SessionHandler) HandleWithInitialData(conn *core.RedisConnection, init
 	for {
 		n, readErr := conn.Read(buf)
 		if readErr != nil {
-			if !errors.Is(readErr, io.EOF) {
-				fmt.Printf("Error reading data: %s\n", readErr)
+			if errors.Is(readErr, io.EOF) {
+				// Connection closed by client - exit gracefully
+				logger.Debug("Connection closed by client", "address", conn.GetAddress())
+				break
 			}
-			continue
+			logger.Error("Error reading data", "error", readErr, "address", conn.GetAddress())
+			break
 		}
 		if n == 0 {
 			continue
@@ -66,7 +70,7 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 	// Try to parse multiple commands from the buffer
 	commands, remaining, err := command.ParseMultipleRequests(buffer)
 	if err != nil {
-		fmt.Printf("Error parsing commands: %s\n", err)
+		logger.Error("Error parsing commands", "error", err)
 		// On error, try to parse as single command (for backward compatibility)
 		sh.handleRequest(conn, buffer)
 		return ""
@@ -74,7 +78,7 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 
 	// Process each parsed command
 	for _, cmd := range commands {
-		fmt.Printf("role: %s, command: %s, args: %v\n", config.GetInstance().Role, cmd.Name, cmd.Args)
+		logger.Debug("Processing command", "role", config.GetInstance().Role, "command", cmd.Name, "args", cmd.Args)
 		sh.router.Route(conn, cmd.Name, cmd.Args)
 
 		cmdArray := []string{cmd.Name}
@@ -82,9 +86,10 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 		respCommand := utils.ToArray(cmdArray)
 
 		if conn.IsMaster() {
-			fmt.Printf("Received %d bytes from master for command: %s, args: %v\n", len(respCommand), cmd.Name, cmd.Args)
-			config.GetInstance().Offset += len(respCommand)
-			fmt.Printf("Current Offset: %d\n", config.GetInstance().Offset)
+			cfg := config.GetInstance()
+			newOffset := cfg.AddOffset(len(respCommand))
+			logger.Debug("Received command from master", 
+				"bytes", len(respCommand), "command", cmd.Name, "args", cmd.Args, "offset", newOffset)
 		}
 	}
 
@@ -96,12 +101,12 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 func (sh *SessionHandler) handleRequest(conn *core.RedisConnection, data string) {
 	cmdName, args, parseErr := command.ParseRequest(data)
 	if parseErr != nil {
-		fmt.Printf("Error parsing command: %s\n", parseErr)
+		logger.Error("Error parsing command", "error", parseErr)
 		conn.SendResponse(utils.ToError(parseErr.Error()))
 		return
 	}
 
-	fmt.Printf("command: %s, args: %v\n", cmdName, args)
+	logger.Debug("Processing single command", "command", cmdName, "args", args)
 
 	// Route the command to the appropriate handler
 	sh.router.Route(conn, cmdName, args)
