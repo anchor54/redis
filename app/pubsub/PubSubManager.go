@@ -62,7 +62,7 @@ func (m *PubSubManager) Unsubscribe(conn *connection.RedisConnection, channel st
 	return len(m.subscriptions[conn.ID])
 }
 
-func (m *PubSubManager) Publish(channel string, message string) {
+func (m *PubSubManager) Publish(channel string, message string) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if connections, ok := m.channels[channel]; ok {
@@ -70,4 +70,5 @@ func (m *PubSubManager) Publish(channel string, message string) {
 			conn.SendResponse(message)
 		}
 	}
+	return len(m.channels[channel])
 }

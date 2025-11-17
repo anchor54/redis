@@ -607,8 +607,8 @@ func publishHandler(cmd *connection.Command) (int, []string, string, error) {
 	channel := args[0]
 	message := args[1]
 	pubsubManager := pubsub.GetManager()
-	pubsubManager.Publish(channel, message)
-	return -1, []string{}, utils.ToRespInt(1), nil
+	n := pubsubManager.Publish(channel, message)
+	return -1, []string{}, utils.ToRespInt(n), nil
 }
 
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
