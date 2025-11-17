@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
+	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
 type PubSubManager struct {
@@ -67,7 +68,13 @@ func (m *PubSubManager) Publish(channel string, message string) int {
 	defer m.mu.RUnlock()
 	if connections, ok := m.channels[channel]; ok {
 		for conn := range connections {
-			conn.SendResponse(message)
+			conn.SendResponse(
+				utils.ToSimpleRespArray([]string{
+					utils.ToBulkString("message"),
+					utils.ToBulkString(channel),
+					utils.ToBulkString(message),
+				}),
+			)
 		}
 	}
 	return len(m.channels[channel])
