@@ -6,9 +6,11 @@ import (
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
+	"github.com/google/uuid"
 )
 
 type RedisConnection struct {
+	Id               string
 	conn             net.Conn
 	inTransaction    bool
 	queuedCommands   []Command
@@ -25,6 +27,7 @@ type Command struct {
 
 func NewRedisConnection(conn net.Conn) *RedisConnection {
 	return &RedisConnection{
+		Id:               uuid.New().String(),
 		conn:             conn,
 		inTransaction:    false,
 		queuedCommands:   make([]Command, 0),
