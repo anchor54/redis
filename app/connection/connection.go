@@ -1,4 +1,4 @@
-package core
+package connection
 
 import (
 	"net"
@@ -14,6 +14,7 @@ type RedisConnection struct {
 	queuedCommands   []Command
 	suppressResponse bool
 	isMaster         bool
+	inPubSubMode     bool
 }
 
 type Command struct {
@@ -125,4 +126,16 @@ func (conn *RedisConnection) IsMaster() bool {
 
 func (conn *RedisConnection) GetAddress() string {
 	return conn.conn.RemoteAddr().String()
+}
+
+func (conn *RedisConnection) EnterPubSubMode() {
+	conn.inPubSubMode = true
+}
+
+func (conn *RedisConnection) ExitPubSubMode() {
+	conn.inPubSubMode = false
+}
+
+func (conn *RedisConnection) IsInPubSubMode() bool {
+	return conn.inPubSubMode
 }

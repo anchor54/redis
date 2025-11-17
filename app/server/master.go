@@ -7,7 +7,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 )
 
@@ -45,7 +45,7 @@ func (ms *MasterServer) Start() error {
 		}
 
 		logger.Debug("New connection accepted", "remote", conn.RemoteAddr())
-		go ms.sessionHandler.Handle(core.NewRedisConnection(conn))
+		go ms.sessionHandler.Handle(connection.NewRedisConnection(conn))
 	}
 }
 
@@ -55,4 +55,3 @@ func (ms *MasterServer) Run() {
 		os.Exit(1)
 	}
 }
-

@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
+	"github.com/codecrafters-io/redis-starter-go/app/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -203,11 +205,11 @@ func readEntriesFromStream(stream *ds.Stream, startIDStr string) ([]*ds.Entry, e
 
 // -------------------------- COMMAND HANDLERS --------------------------
 
-func pingHandler(cmd *Command) (int, []string, string, error) {
+func pingHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToSimpleString("PONG"), nil
 }
 
-func echoHandler(cmd *Command) (int, []string, string, error) {
+func echoHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) == 0 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -215,7 +217,7 @@ func echoHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToBulkString(args[0]), nil
 }
 
-func setHandler(cmd *Command) (int, []string, string, error) {
+func setHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 2 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -245,7 +247,7 @@ func setHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{key}, utils.ToSimpleString(constants.OKResponse), nil
 }
 
-func getHandler(cmd *Command) (int, []string, string, error) {
+func getHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -259,7 +261,7 @@ func getHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToBulkString(val), nil
 }
 
-func lpushHandler(cmd *Command) (int, []string, string, error) {
+func lpushHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 2 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -278,7 +280,7 @@ func lpushHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{key}, utils.ToRespInt(n), nil
 }
 
-func rpushHandler(cmd *Command) (int, []string, string, error) {
+func rpushHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 2 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -296,7 +298,7 @@ func rpushHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{key}, utils.ToRespInt(n), nil
 }
 
-func lrangeHandler(cmd *Command) (int, []string, string, error) {
+func lrangeHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 3 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -322,7 +324,7 @@ func lrangeHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToArray(list.LRange(left, right)), nil
 }
 
-func llenHandler(cmd *Command) (int, []string, string, error) {
+func llenHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -339,7 +341,7 @@ func llenHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToRespInt(list.Length()), nil
 }
 
-func lpopHandler(cmd *Command) (int, []string, string, error) {
+func lpopHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -372,7 +374,7 @@ func lpopHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToBulkString(removedElement), nil
 }
 
-func blpopHandler(cmd *Command) (int, []string, string, error) {
+func blpopHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 2 {
 		return -1, []string{}, "", err.ErrInvalidArguments
@@ -404,7 +406,7 @@ func blpopHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToArray(nil), nil
 }
 
-func typeHandler(cmd *Command) (int, []string, string, error) {
+func typeHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -430,7 +432,7 @@ func typeHandler(cmd *Command) (int, []string, string, error) {
 	}
 }
 
-func xaddHandler(cmd *Command) (int, []string, string, error) {
+func xaddHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 4 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -455,7 +457,7 @@ func xaddHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{key}, utils.ToBulkString(entry.ID.String()), nil
 }
 
-func xrangeHandler(cmd *Command) (int, []string, string, error) {
+func xrangeHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 3 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -487,7 +489,7 @@ func xrangeHandler(cmd *Command) (int, []string, string, error) {
 
 var ErrTimeout = errors.New("timeout")
 
-func xreadHandler(cmd *Command) (int, []string, string, error) {
+func xreadHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	timeout, streamKeys, startIDs, err := parseXReadArgs(args)
 	if err != nil {
@@ -536,7 +538,7 @@ func xreadHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, toStreamEntriesByKey(streamEntries), nil
 }
 
-func incrHandler(cmd *Command) (int, []string, string, error) {
+func incrHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -552,7 +554,7 @@ func incrHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToRespInt(count), nil
 }
 
-func infoHandler(cmd *Command) (int, []string, string, error) {
+func infoHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	config := config.GetInstance()
 	if len(args) > 0 {
@@ -564,7 +566,7 @@ func infoHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToNullBulkString(), nil
 }
 
-func configHandler(cmd *Command) (int, []string, string, error) {
+func configHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 2 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -580,7 +582,7 @@ func configHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, "", ErrInvalidArguments
 }
 
-func keysHandler(cmd *Command) (int, []string, string, error) {
+func keysHandler(cmd *connection.Command) (int, []string, string, error) {
 	args := cmd.Args
 	if len(args) < 1 {
 		return -1, []string{}, "", ErrInvalidArguments
@@ -597,23 +599,36 @@ func keysHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToArray(keys), nil
 }
 
-var Handlers = map[string]func(*Command) (int, []string, string, error){
-	"PING":   pingHandler,
-	"ECHO":   echoHandler,
-	"SET":    setHandler,
-	"GET":    getHandler,
-	"LPUSH":  lpushHandler,
-	"RPUSH":  rpushHandler,
-	"LRANGE": lrangeHandler,
-	"LLEN":   llenHandler,
-	"LPOP":   lpopHandler,
-	"BLPOP":  blpopHandler,
-	"TYPE":   typeHandler,
-	"XADD":   xaddHandler,
-	"XRANGE": xrangeHandler,
-	"XREAD":  xreadHandler,
-	"INCR":   incrHandler,
-	"INFO":   infoHandler,
-	"CONFIG": configHandler,
-	"KEYS":   keysHandler,
+func publishHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 2 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+	channel := args[0]
+	message := args[1]
+	pubsubManager := pubsub.GetManager()
+	pubsubManager.Publish(channel, message)
+	return -1, []string{}, utils.ToRespInt(1), nil
+}
+
+var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
+	"PING":    pingHandler,
+	"ECHO":    echoHandler,
+	"SET":     setHandler,
+	"GET":     getHandler,
+	"LPUSH":   lpushHandler,
+	"RPUSH":   rpushHandler,
+	"LRANGE":  lrangeHandler,
+	"LLEN":    llenHandler,
+	"LPOP":    lpopHandler,
+	"BLPOP":   blpopHandler,
+	"TYPE":    typeHandler,
+	"XADD":    xaddHandler,
+	"XRANGE":  xrangeHandler,
+	"XREAD":   xreadHandler,
+	"INCR":    incrHandler,
+	"INFO":    infoHandler,
+	"CONFIG":  configHandler,
+	"KEYS":    keysHandler,
+	"PUBLISH": publishHandler,
 }

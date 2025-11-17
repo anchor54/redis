@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -89,6 +89,6 @@ func ParseMultipleRequests(data string) ([]ParsedCommand, string, error) {
 }
 
 // CreateCommand creates a Command object from command name and arguments
-func CreateCommand(command string, args []string) core.Command {
-	return core.CreateCommand(command, args...)
+func CreateCommand(command string, args []string) connection.Command {
+	return connection.CreateCommand(command, args...)
 }

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
@@ -44,7 +45,7 @@ func (e *Executor) Start() {
 }
 
 // handleCommand processes a single command
-func (e *Executor) handleCommand(cmd *core.Command) {
+func (e *Executor) handleCommand(cmd *connection.Command) {
 	handler, ok := core.Handlers[cmd.Command]
 	if !ok {
 		logger.Warn("Unknown command", "command", cmd.Command)

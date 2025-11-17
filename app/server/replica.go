@@ -12,10 +12,10 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
-	rdb "github.com/codecrafters-io/redis-starter-go/app/data"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
+	rdb "github.com/codecrafters-io/redis-starter-go/app/parser"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -74,7 +74,7 @@ func (rs *ReplicaServer) handleConnection(listener *net.Listener) {
 		}
 
 		logger.Debug("New connection accepted", "remote", conn.RemoteAddr())
-		go rs.sessionHandler.Handle(core.NewRedisConnection(conn))
+		go rs.sessionHandler.Handle(connection.NewRedisConnection(conn))
 	}
 }
 
@@ -86,7 +86,7 @@ func (rs *ReplicaServer) Run() {
 }
 
 // connectToMaster establishes a connection to the master server
-func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error) {
+func (rs *ReplicaServer) connectToMaster() (*connection.RedisConnection, []byte, error) {
 	masterAddress := net.JoinHostPort(rs.config.MasterHost, rs.config.MasterPort)
 	logger.Info("Connecting to master", "address", masterAddress)
 	conn, err := net.DialTimeout("tcp", masterAddress, 10*time.Second)
@@ -100,7 +100,7 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error
 	conn.Write([]byte(ping))
 
 	// Handle master communication and replication
-	masterConn := core.NewRedisConnection(conn)
+	masterConn := connection.NewRedisConnection(conn)
 	masterConn.SetSuppressResponse(false)
 	masterConn.MarkAsMaster()
 	response, err := rs.getMasterResponse(masterConn)
@@ -134,7 +134,7 @@ func (rs *ReplicaServer) connectToMaster() (*core.RedisConnection, []byte, error
 }
 
 // sendReplconfCommands sends REPLCONF commands to the master
-func (rs *ReplicaServer) sendReplconfCommands(masterConn *core.RedisConnection) error {
+func (rs *ReplicaServer) sendReplconfCommands(masterConn *connection.RedisConnection) error {
 	// Send REPLCONF listening-port
 	replconfListeningPort := utils.ToArray([]string{"REPLCONF", "listening-port", strconv.Itoa(rs.config.Port)})
 	masterConn.SendResponse(replconfListeningPort)
@@ -164,7 +164,7 @@ func (rs *ReplicaServer) sendReplconfCommands(masterConn *core.RedisConnection) 
 	return nil
 }
 
-func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) ([]byte, error) {
+func (rs *ReplicaServer) sendPsync(conn *connection.RedisConnection) ([]byte, error) {
 	// Use replication ID and offset from config
 	psync := utils.ToArray([]string{"PSYNC", rs.config.ReplicationID, strconv.Itoa(rs.config.GetOffset())})
 	conn.SendResponse(psync)
@@ -275,7 +275,7 @@ func extractBinary(data []byte) ([]byte, []byte, error) {
 }
 
 // getMasterResponse reads and parses a response from the master
-func (rs *ReplicaServer) getMasterResponse(conn *core.RedisConnection) (string, error) {
+func (rs *ReplicaServer) getMasterResponse(conn *connection.RedisConnection) (string, error) {
 	buff := make([]byte, constants.SmallBufferSize)
 	n, err := conn.Read(buff)
 	if err != nil {

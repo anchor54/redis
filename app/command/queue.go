@@ -1,31 +1,31 @@
 package command
 
 import (
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 )
 
 // Queue manages command and transaction queues
 type Queue struct {
-	cmdQueue     chan *core.Command
+	cmdQueue     chan *connection.Command
 	transactions chan *Transaction
 }
 
 // Transaction represents a Redis transaction
 type Transaction struct {
-	Commands []core.Command
+	Commands []connection.Command
 	Response chan string
 }
 
 // NewQueue creates a new command queue
 func NewQueue(cmdQueueSize, transactionQueueSize int) *Queue {
 	return &Queue{
-		cmdQueue:     make(chan *core.Command, cmdQueueSize),
+		cmdQueue:     make(chan *connection.Command, cmdQueueSize),
 		transactions: make(chan *Transaction, transactionQueueSize),
 	}
 }
 
 // EnqueueCommand adds a command to the command queue
-func (q *Queue) EnqueueCommand(cmd *core.Command) {
+func (q *Queue) EnqueueCommand(cmd *connection.Command) {
 	q.cmdQueue <- cmd
 }
 
@@ -35,7 +35,7 @@ func (q *Queue) EnqueueTransaction(trans *Transaction) {
 }
 
 // CommandQueue returns the command channel
-func (q *Queue) CommandQueue() <-chan *core.Command {
+func (q *Queue) CommandQueue() <-chan *connection.Command {
 	return q.cmdQueue
 }
 
@@ -43,4 +43,3 @@ func (q *Queue) CommandQueue() <-chan *core.Command {
 func (q *Queue) TransactionQueue() <-chan *Transaction {
 	return q.transactions
 }
-

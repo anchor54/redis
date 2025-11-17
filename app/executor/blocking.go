@@ -3,6 +3,7 @@ package executor
 import (
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
@@ -10,7 +11,7 @@ import (
 
 // WaitingCommand represents a command that is waiting for a key to be available
 type WaitingCommand struct {
-	Command     *core.Command
+	Command     *connection.Command
 	WaitingKeys []string
 }
 
@@ -27,7 +28,7 @@ func NewBlockingCommandManager() *BlockingCommandManager {
 }
 
 // AddWaitingCommand adds a command to the blocking commands map
-func (bcm *BlockingCommandManager) AddWaitingCommand(timeout int, keys []string, cmd *core.Command) {
+func (bcm *BlockingCommandManager) AddWaitingCommand(timeout int, keys []string, cmd *connection.Command) {
 	waitingCommand := &WaitingCommand{Command: cmd, WaitingKeys: keys}
 	for _, key := range keys {
 		bcm.blockingCommands[key] = append(bcm.blockingCommands[key], waitingCommand)
@@ -94,4 +95,3 @@ func (bcm *BlockingCommandManager) removeWaitingCommand(waitingCommands []*Waiti
 	}
 	return waitingCommands
 }
-

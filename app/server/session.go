@@ -6,8 +6,8 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -25,17 +25,16 @@ func NewSessionHandler(queue *command.Queue) *SessionHandler {
 }
 
 // Handle handles a client connection session
-func (sh *SessionHandler) Handle(conn *core.RedisConnection) {
+func (sh *SessionHandler) Handle(conn *connection.RedisConnection) {
 	sh.HandleWithInitialData(conn, []byte{})
 }
 
 // HandleWithInitialData handles a client connection session with initial data
-func (sh *SessionHandler) HandleWithInitialData(conn *core.RedisConnection, initialData []byte) {
+func (sh *SessionHandler) HandleWithInitialData(conn *connection.RedisConnection, initialData []byte) {
 	defer conn.Close()
 
 	buf := make([]byte, constants.DefaultBufferSize)
 	buffer := string(initialData) // Per-connection buffer to accumulate incomplete data
-
 
 	if len(buffer) > 0 {
 		buffer = sh.handleRequests(conn, buffer)
@@ -58,7 +57,7 @@ func (sh *SessionHandler) HandleWithInitialData(conn *core.RedisConnection, init
 
 		// Append new data to buffer
 		buffer += string(buf[:n])
-		
+
 		// Parse and handle all complete commands in the buffer
 		buffer = sh.handleRequests(conn, buffer)
 	}
@@ -66,7 +65,7 @@ func (sh *SessionHandler) HandleWithInitialData(conn *core.RedisConnection, init
 
 // handleRequests processes multiple requests from the accumulated buffer
 // Returns the remaining unparsed data
-func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer string) string {
+func (sh *SessionHandler) handleRequests(conn *connection.RedisConnection, buffer string) string {
 	// Try to parse multiple commands from the buffer
 	commands, remaining, err := command.ParseMultipleRequests(buffer)
 	if err != nil {
@@ -88,7 +87,7 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 		if conn.IsMaster() {
 			cfg := config.GetInstance()
 			newOffset := cfg.AddOffset(len(respCommand))
-			logger.Debug("Received command from master", 
+			logger.Debug("Received command from master",
 				"bytes", len(respCommand), "command", cmd.Name, "args", cmd.Args, "offset", newOffset)
 		}
 	}
@@ -98,7 +97,7 @@ func (sh *SessionHandler) handleRequests(conn *core.RedisConnection, buffer stri
 }
 
 // handleRequest processes a single request (fallback for old behavior)
-func (sh *SessionHandler) handleRequest(conn *core.RedisConnection, data string) {
+func (sh *SessionHandler) handleRequest(conn *connection.RedisConnection, data string) {
 	cmdName, args, parseErr := command.ParseRequest(data)
 	if parseErr != nil {
 		logger.Error("Error parsing command", "error", parseErr)

@@ -39,6 +39,9 @@ const (
 	CommandREPLCONF CommandType = "REPLCONF"
 	CommandPSYNC  CommandType = "PSYNC"
 	CommandWAIT   CommandType = "WAIT"
+	CommandSUBSCRIBE CommandType = "SUBSCRIBE"
+	CommandUNSUBSCRIBE CommandType = "UNSUBSCRIBE"
+	CommandPUBLISH CommandType = "PUBLISH"
 )
 
 // Write commands that modify the database
@@ -51,3 +54,9 @@ var WriteCommands = map[string]bool{
 	string(CommandINCR):  true,
 }
 
+// PubSub commands
+var PubSubCommands = map[string]bool{
+	string(CommandSUBSCRIBE): true,
+	string(CommandUNSUBSCRIBE): true,
+	string(CommandPUBLISH): true,
+}

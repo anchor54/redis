@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
 // Manager manages all replica connections
 type Manager struct {
-	replicas map[*core.RedisConnection]*ReplicaInfo // Map of replica ID -> ReplicaInfo
-	mu       sync.RWMutex                           // Protects concurrent access
+	replicas map[*connection.RedisConnection]*ReplicaInfo // Map of replica ID -> ReplicaInfo
+	mu       sync.RWMutex                                 // Protects concurrent access
 }
 
 var (
@@ -26,7 +26,7 @@ var (
 func GetManager() *Manager {
 	once.Do(func() {
 		manager = &Manager{
-			replicas: make(map[*core.RedisConnection]*ReplicaInfo),
+			replicas: make(map[*connection.RedisConnection]*ReplicaInfo),
 		}
 	})
 	return manager
@@ -48,7 +48,7 @@ func (m *Manager) GetAllReplicas() []*ReplicaInfo {
 }
 
 // GetReplica returns the replica info for the given connection
-func (m *Manager) GetReplica(conn *core.RedisConnection) *ReplicaInfo {
+func (m *Manager) GetReplica(conn *connection.RedisConnection) *ReplicaInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.replicas[conn]

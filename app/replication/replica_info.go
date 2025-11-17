@@ -1,20 +1,20 @@
 package replication
 
 import (
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 )
 
 // ReplicaInfo holds basic information about a connected replica
 type ReplicaInfo struct {
-	Connection      *core.RedisConnection // Connection to the replica
-	ListeningPort   int                   // Port the replica is listening on (from REPLCONF listening-port)
-	Capabilities    []string              // Capabilities reported by replica (from REPLCONF capa, e.g., "psync2")
-	IsHandshakeDone bool                  // Whether the handshake is done
-	LastAckOffset   int                   // NEW: last offset ACKed by this replica
+	Connection      *connection.RedisConnection // Connection to the replica
+	ListeningPort   int                         // Port the replica is listening on (from REPLCONF listening-port)
+	Capabilities    []string                    // Capabilities reported by replica (from REPLCONF capa, e.g., "psync2")
+	IsHandshakeDone bool                        // Whether the handshake is done
+	LastAckOffset   int                         // NEW: last offset ACKed by this replica
 }
 
 // NewReplicaInfo creates a new ReplicaInfo
-func NewReplicaInfo(conn *core.RedisConnection) *ReplicaInfo {
+func NewReplicaInfo(conn *connection.RedisConnection) *ReplicaInfo {
 	return &ReplicaInfo{
 		Connection:      conn,
 		Capabilities:    make([]string, 0),
