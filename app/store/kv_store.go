@@ -14,8 +14,8 @@ type KVStore struct {
 }
 
 var (
-	instance	*KVStore
-	once		sync.Once
+	instance *KVStore
+	once     sync.Once
 )
 
 func GetInstance() *KVStore {
@@ -141,4 +141,28 @@ func (store *KVStore) IncrementString(key string) (int, error) {
 	})
 
 	return newCount, err
+}
+
+// StoreRDBEntry stores a key-value pair from an RDB file with an optional expiry.
+// This implements the RDBStore interface for loading RDB data.
+func (store *KVStore) StoreRDBEntry(key, value string, expireAt *time.Time) {
+	kvObj := ds.NewStringObject(value)
+	if expireAt != nil {
+		kvObj.TTL = expireAt
+	}
+	store.Store(key, &kvObj)
+}
+
+// GetAllKeys returns all keys in the store (non-expired only).
+func (store *KVStore) GetAllKeys() []string {
+	keys := make([]string, 0)
+	store.store.Range(func(key string, val *ds.RedisObject) bool {
+		// Skip expired keys
+		if val.TTL != nil && val.TTL.Before(time.Now()) {
+			return true // continue iteration
+		}
+		keys = append(keys, key)
+		return true // continue iteration
+	})
+	return keys
 }

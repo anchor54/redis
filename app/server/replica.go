@@ -14,7 +14,9 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/core"
+	rdb "github.com/codecrafters-io/redis-starter-go/app/data"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
+	"github.com/codecrafters-io/redis-starter-go/app/store"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
@@ -230,7 +232,16 @@ func (rs *ReplicaServer) sendPsync(conn *core.RedisConnection) ([]byte, error) {
 	}
 
 	logger.Debug("Received RDB file from master", "size", len(binaryData))
-	logger.Info("Successfully received RDB file from master")
+
+	// Parse and load the RDB data into the store
+	kvStore := store.GetInstance()
+	if err := rdb.LoadRDBIntoStore(binaryData, kvStore); err != nil {
+		logger.Error("Failed to parse RDB data from master", "error", err)
+		// Don't fail the handshake - just log the error and continue
+	} else {
+		logger.Info("Successfully loaded RDB data from master")
+	}
+
 	return remainingData, nil
 }
 

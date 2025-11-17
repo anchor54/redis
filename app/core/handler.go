@@ -580,6 +580,23 @@ func configHandler(cmd *Command) (int, []string, string, error) {
 	return -1, []string{}, "", ErrInvalidArguments
 }
 
+func keysHandler(cmd *Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 1 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	// For simplicity, we only support "KEYS *" (return all keys)
+	pattern := args[0]
+	if pattern != "*" {
+		return -1, []string{}, "", errors.New("only KEYS * is supported")
+	}
+
+	db := store.GetInstance()
+	keys := db.GetAllKeys()
+	return -1, []string{}, utils.ToArray(keys), nil
+}
+
 var Handlers = map[string]func(*Command) (int, []string, string, error){
 	"PING":   pingHandler,
 	"ECHO":   echoHandler,
@@ -598,4 +615,5 @@ var Handlers = map[string]func(*Command) (int, []string, string, error){
 	"INCR":   incrHandler,
 	"INFO":   infoHandler,
 	"CONFIG": configHandler,
+	"KEYS":   keysHandler,
 }
