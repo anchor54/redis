@@ -56,6 +56,7 @@ var WriteCommands = map[string]bool{
 
 // PubSub commands
 var PubSubCommands = map[string]bool{
+	string(CommandPING): true,
 	string(CommandSUBSCRIBE): true,
 	string(CommandUNSUBSCRIBE): true,
 	string(CommandPUBLISH): true,

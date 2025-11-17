@@ -30,7 +30,7 @@ func GetManager() *PubSubManager {
 func (m *PubSubManager) Subscribe(conn *connection.RedisConnection, channel string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	conn.EnterPubSubMode()
 
 	if _, ok := m.channels[channel]; !ok {
@@ -38,11 +38,11 @@ func (m *PubSubManager) Subscribe(conn *connection.RedisConnection, channel stri
 	}
 	m.channels[channel][conn] = true
 
-	if _, ok := m.subscriptions[conn.Id]; !ok {
-		m.subscriptions[conn.Id] = make(map[string]bool)
+	if _, ok := m.subscriptions[conn.ID]; !ok {
+		m.subscriptions[conn.ID] = make(map[string]bool)
 	}
-	m.subscriptions[conn.Id][channel] = true
-	return len(m.subscriptions[conn.Id])
+	m.subscriptions[conn.ID][channel] = true
+	return len(m.subscriptions[conn.ID])
 }
 
 func (m *PubSubManager) Unsubscribe(conn *connection.RedisConnection, channel string) int {
@@ -52,10 +52,14 @@ func (m *PubSubManager) Unsubscribe(conn *connection.RedisConnection, channel st
 		delete(connections, conn)
 	}
 
-	if subscriptions, ok := m.subscriptions[conn.Id]; ok {
+	if subscriptions, ok := m.subscriptions[conn.ID]; ok {
 		delete(subscriptions, channel)
 	}
-	return len(m.subscriptions[conn.Id])
+
+	if len(m.subscriptions[conn.ID]) == 0 {
+		conn.ExitPubSubMode()
+	}
+	return len(m.subscriptions[conn.ID])
 }
 
 func (m *PubSubManager) Publish(channel string, message string) {

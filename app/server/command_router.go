@@ -63,6 +63,12 @@ func (cr *CommandRouter) Route(conn *connection.RedisConnection, cmdName string,
 		return
 	}
 
+	// Special case: PING in pubsub mode returns an array
+	if cmdName == "PING" && conn.IsInPubSubMode() {
+		conn.SendResponse(utils.ToArray([]string{"pong", ""}))
+		return
+	}
+
 	// Check if it's a session-level command
 	if handler, exists := cr.sessionHandlers[cmdName]; exists {
 		if handlerErr := handler(conn, args, cr.queue); handlerErr != nil {
