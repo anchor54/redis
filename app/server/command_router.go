@@ -59,7 +59,7 @@ func (cr *CommandRouter) Route(conn *connection.RedisConnection, cmdName string,
 	}
 
 	if conn.IsInPubSubMode() && !cr.isPubSubCommand(cmdName) {
-		conn.SendError(err.ErrInvalidPubSubCommand.Error())
+		conn.SendError(fmt.Sprintf("Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", cmdName))
 		return
 	}
 

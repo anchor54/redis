@@ -30,6 +30,9 @@ func GetManager() *PubSubManager {
 func (m *PubSubManager) Subscribe(conn *connection.RedisConnection, channel string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	
+	conn.EnterPubSubMode()
+
 	if _, ok := m.channels[channel]; !ok {
 		m.channels[channel] = make(map[*connection.RedisConnection]bool)
 	}

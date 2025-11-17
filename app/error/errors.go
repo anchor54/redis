@@ -9,5 +9,4 @@ var (
 	ErrDiscardWithoutMulti = errors.New("DISCARD without MULTI")
 	ErrFailedToLoadOrStoreList = errors.New("failed to load or store list")
 	ErrInvalidArguments = errors.New("invalid arguments")
-	ErrInvalidPubSubCommand = errors.New("Can't execute 'echo': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context")
 )
