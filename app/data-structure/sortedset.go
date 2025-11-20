@@ -106,3 +106,17 @@ func (ss *SortedSet) GetScore(key string) (float64, bool) {
 	score, ok := ss.score[key]
 	return score, ok
 }
+
+func (ss *SortedSet) Remove(keys ...string) int {
+	count := 0
+	for _, key := range keys {
+		if _, ok := ss.score[key]; !ok {
+			continue
+		}
+	
+		ss.skipList.Delete(KeyValue{Key: key, Value: ss.score[key]})
+		delete(ss.score, key)
+		count++
+	}
+	return count
+}

@@ -721,6 +721,22 @@ func zscoreHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToBulkString(strconv.FormatFloat(score, 'f', -1, 64)), nil
 }
 
+func zremHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 2 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	sortedSet, ok := store.GetInstance().GetSortedSet(key)
+	if !ok {
+		return -1, []string{}, utils.ToRespInt(0), nil
+	}
+	
+	removeCount := sortedSet.Remove(args[1:]...)
+	return -1, []string{}, utils.ToRespInt(removeCount), nil
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":    pingHandler,
 	"ECHO":    echoHandler,
@@ -746,4 +762,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"ZRANGE":  zrangeHandler,
 	"ZCARD":   zcardHandler,
 	"ZSCORE":  zscoreHandler,
+	"ZREM":    zremHandler,
 }
