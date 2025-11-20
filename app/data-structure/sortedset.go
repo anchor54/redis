@@ -98,3 +98,7 @@ func (ss *SortedSet) GetRange(start int, end int) []KeyValue {
 
 	return result
 }
+
+func (ss *SortedSet) GetCardinality() int {
+	return ss.skipList.Len()
+}

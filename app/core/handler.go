@@ -686,6 +686,21 @@ func zrangeHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToArray(members), nil
 }
 
+func zcardHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 1 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	sortedSet, ok := store.GetInstance().GetSortedSet(key)
+	if !ok {
+		return -1, []string{}, utils.ToRespInt(0), nil
+	}
+
+	return -1, []string{}, utils.ToRespInt(sortedSet.GetCardinality()), nil
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":    pingHandler,
 	"ECHO":    echoHandler,
@@ -709,4 +724,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"ZADD":    zaddHandler,
 	"ZRANK":   zrankHandler,
 	"ZRANGE":  zrangeHandler,
+	"ZCARD":   zcardHandler,
 }
