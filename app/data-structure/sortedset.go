@@ -64,16 +64,24 @@ func (ss *SortedSet) GetRank(key string) int {
 }
 
 func (ss *SortedSet) GetRange(start int, end int) []KeyValue {
-	if start > end || start >= ss.skipList.Len() {
+	if start >= ss.skipList.Len() {
 		return []KeyValue{}
 	}
 
-	if end < 0 || end >= ss.skipList.Len() {
+	if end >= ss.skipList.Len() {
 		end = ss.skipList.Len() - 1
 	}
 
 	if start < 0 {
-		start = 0
+		start = max(0, start + ss.skipList.Len())
+	}
+
+	if end < 0 {
+		end = max(0, end + ss.skipList.Len())
+	}
+
+	if start > end {
+		return []KeyValue{}
 	}
 
 	node, ok := ss.skipList.SearchByRank(start + 1)
