@@ -44,12 +44,11 @@ func AsSortedSet(v RValue) (*SortedSet, bool) {
 func (ss *SortedSet) Add(args []KeyValue) int {
 	count := 0
 	for _, keyValue := range args {
-		if _, ok := ss.score[keyValue.Key]; ok {
-			continue
+		if _, ok := ss.score[keyValue.Key]; !ok {
+			count++
+			ss.skipList.Add(keyValue)
 		}
 		ss.score[keyValue.Key] = keyValue.Value
-		ss.skipList.Add(keyValue)
-		count++
 	}
 	return count
 }
@@ -101,4 +100,9 @@ func (ss *SortedSet) GetRange(start int, end int) []KeyValue {
 
 func (ss *SortedSet) GetCardinality() int {
 	return ss.skipList.Len()
+}
+
+func (ss *SortedSet) GetScore(key string) (float64, bool) {
+	score, ok := ss.score[key]
+	return score, ok
 }
