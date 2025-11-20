@@ -12,6 +12,9 @@ type KeyValue struct {
 }
 
 func (kv KeyValue) Compare(other KeyValue) int {
+	if kv.Value == other.Value {
+		return cmp.Compare(kv.Key, other.Key)
+	}
 	return cmp.Compare(kv.Value, other.Value)
 }
 
@@ -49,4 +52,13 @@ func (ss *SortedSet) Add(args []KeyValue) int {
 		count++
 	}
 	return count
+}
+
+func (ss *SortedSet) GetRank(key string) int {
+	score, ok := ss.score[key]
+	if !ok {
+		return -1
+	}
+	rank, _ := ss.skipList.GetRank(KeyValue{Key: key, Value: score})
+	return rank - 1
 }

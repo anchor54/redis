@@ -627,7 +627,7 @@ func zaddHandler(cmd *connection.Command) (int, []string, string, error) {
 	kvList := make([]ds.KeyValue, len(args) / 2)
 	
 	for i := 0; i < len(args); i += 2 {
-		score, err := strconv.ParseFloat(args[i], 32)
+		score, err := strconv.ParseFloat(args[i], 64)
 		if err != nil {
 			return -1, []string{}, "", errors.New(err.Error())
 		}
@@ -636,6 +636,23 @@ func zaddHandler(cmd *connection.Command) (int, []string, string, error) {
 
 	numAddedValues := sortedSet.Add(kvList)
 	return -1, []string{}, utils.ToRespInt(numAddedValues), nil
+}
+
+func zrankHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 2 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	
+	sortedSet, _ := store.GetInstance().LoadOrStoreSortedSet(key)
+	rank := sortedSet.GetRank(args[1])
+
+	if rank < 0 {
+		return -1, []string{}, utils.ToNullBulkString(), nil
+	}
+	return -1, []string{}, utils.ToRespInt(rank), nil
 }
 
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
@@ -659,4 +676,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"KEYS":    keysHandler,
 	"PUBLISH": publishHandler,
 	"ZADD":    zaddHandler,
+	"ZRANK":   zrankHandler,
 }
