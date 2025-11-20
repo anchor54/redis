@@ -86,6 +86,16 @@ func (store *KVStore) LoadOrStoreStream(key string) (*ds.Stream, bool) {
 	return stream, loaded
 }
 
+func (store *KVStore) LoadOrStoreSortedSet(key string) (*ds.SortedSet, bool) {
+	kvObj := ds.RedisObject{Value: ds.NewSortedSet(), TTL: nil}
+	val, loaded := store.store.LoadOrStore(key, &kvObj)
+	sortedSet, ok := ds.AsSortedSet(val.Get())
+	if !ok {
+		return nil, false
+	}
+	return sortedSet, loaded
+}
+
 func (store *KVStore) GetStream(key string) (*ds.Stream, bool) {
 	val, ok := store.GetValue(key)
 	if !ok {

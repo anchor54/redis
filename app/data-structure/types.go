@@ -6,6 +6,7 @@ const (
 	RString RType = iota
 	RList
 	RStream
+	RSortedSet
 	RUnknown
 )
 

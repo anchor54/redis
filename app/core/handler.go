@@ -611,6 +611,33 @@ func publishHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToRespInt(n), nil
 }
 
+func zaddHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 3 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+	key := args[0]
+	args = args[1:]
+	if len(args) % 2 != 0 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	db := store.GetInstance()
+	sortedSet, _ := db.LoadOrStoreSortedSet(key)
+	kvList := make([]ds.KeyValue, len(args) / 2)
+	
+	for i := 0; i < len(args); i += 2 {
+		score, err := strconv.ParseFloat(args[i], 32)
+		if err != nil {
+			return -1, []string{}, "", errors.New(err.Error())
+		}
+		kvList[i/2] = ds.KeyValue{Key: args[i + 1], Value: score}
+	}
+
+	numAddedValues := sortedSet.Add(kvList)
+	return -1, []string{}, utils.ToRespInt(numAddedValues), nil
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":    pingHandler,
 	"ECHO":    echoHandler,
@@ -631,4 +658,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"CONFIG":  configHandler,
 	"KEYS":    keysHandler,
 	"PUBLISH": publishHandler,
+	"ZADD":    zaddHandler,
 }

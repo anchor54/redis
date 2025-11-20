@@ -1,3 +1,5 @@
+github.com/anchor54/SkipList v1.0.1 h1:W+zSxCke6eLuXZp/N9fOc3H79LQ8PWiRHoNzXhG0H0E=
+github.com/anchor54/SkipList v1.0.1/go.mod h1:hXy+lWB2dciAOs6Aqz+s2C2aSs7bWH+vakXdtBsRAlE=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/hashicorp/go-immutable-radix/v2 v2.1.0 h1:CUW5RYIcysz+D3B+l1mDeXrQ7fUvGGCwJfdASSzbrfo=
