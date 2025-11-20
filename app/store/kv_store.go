@@ -104,6 +104,14 @@ func (store *KVStore) GetStream(key string) (*ds.Stream, bool) {
 	return ds.AsStream(val.Get())
 }
 
+func (store *KVStore) GetSortedSet(key string) (*ds.SortedSet, bool) {
+	val, ok := store.GetValue(key)
+	if !ok {
+		return nil, false
+	}
+	return ds.AsSortedSet(val.Get())
+}
+
 // IncrementString atomically increments a string value by 1.
 // Returns the new value after increment, or an error if the value is not an integer.
 // If the key doesn't exist, it's treated as "0" and incremented to "1".

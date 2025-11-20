@@ -62,3 +62,31 @@ func (ss *SortedSet) GetRank(key string) int {
 	rank, _ := ss.skipList.GetRank(KeyValue{Key: key, Value: score})
 	return rank - 1
 }
+
+func (ss *SortedSet) GetRange(start int, end int) []KeyValue {
+	if start > end || start >= ss.skipList.Len() {
+		return []KeyValue{}
+	}
+
+	if end < 0 || end >= ss.skipList.Len() {
+		end = ss.skipList.Len() - 1
+	}
+
+	if start < 0 {
+		start = 0
+	}
+
+	node, ok := ss.skipList.SearchByRank(start + 1)
+	if !ok {
+		return []KeyValue{}
+	}
+
+	len := end - start + 1
+	result := make([]KeyValue, len)
+	for i := 0; i < len && node != nil; i++ {
+		result[i] = node.Value()
+		node = node.GetNextNodeAtLevel(0)
+	}
+
+	return result
+}

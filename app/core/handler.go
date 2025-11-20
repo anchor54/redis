@@ -655,6 +655,37 @@ func zrankHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToRespInt(rank), nil
 }
 
+func zrangeHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 3 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	start, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return -1, []string{}, "", errors.New(err.Error())
+	}
+	
+	end, err := strconv.ParseInt(args[2], 10, 64)
+	if err != nil {
+		return -1, []string{}, "", errors.New(err.Error())
+	}
+
+	sortedSet, ok := store.GetInstance().GetSortedSet(key)
+	if !ok {
+		return -1, []string{}, utils.ToArray([]string{}), nil
+	}
+	result := sortedSet.GetRange(int(start), int(end))
+	
+	members := make([]string, len(result))
+	for i := 0; i < len(result); i++ {
+		members[i] = result[i].Key
+	}
+
+	return -1, []string{}, utils.ToArray(members), nil
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":    pingHandler,
 	"ECHO":    echoHandler,
@@ -677,4 +708,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"PUBLISH": publishHandler,
 	"ZADD":    zaddHandler,
 	"ZRANK":   zrankHandler,
+	"ZRANGE":  zrangeHandler,
 }
