@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	ds "github.com/codecrafters-io/redis-starter-go/app/data-structure"
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
+	"github.com/codecrafters-io/redis-starter-go/app/geohash"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
@@ -737,6 +739,50 @@ func zremHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToRespInt(removeCount), nil
 }
 
+func geoAddHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 4 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	sortedSet, _ := store.GetInstance().LoadOrStoreSortedSet(key)
+
+	args = args[1:]
+	if len(args) % 3 != 0 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	locations := make([]ds.KeyValue, len(args) / 3)
+	for i := 0; i < len(args); i += 3 {
+		lon, err := strconv.ParseFloat(args[i], 64)
+		if err != nil {
+			return -1, []string{}, "", err
+		}
+		lat, err := strconv.ParseFloat(args[i + 1], 64)
+		if err != nil {
+			return -1, []string{}, "", err
+		}
+
+		if lat < geohash.LatMin || lat > geohash.LatMax || lon < geohash.LonMin || lon > geohash.LonMax {
+			return -1, []string{}, "", fmt.Errorf("invalid longitude,latitude pair %f,%f", lon, lat)
+		} 
+
+		geoHash, err := geohash.GetCoordinateScore(lat, lon)
+		if err != nil {
+			return -1, []string{}, "", err
+		}
+
+		locations[i / 3] = ds.KeyValue{
+			Key: args[i + 2],
+			Value: float64(geoHash),
+		}
+	}
+	fmt.Println(locations)
+	
+	return -1, []string{}, utils.ToRespInt(sortedSet.Add(locations)), nil
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":    pingHandler,
 	"ECHO":    echoHandler,
@@ -763,4 +809,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"ZCARD":   zcardHandler,
 	"ZSCORE":  zscoreHandler,
 	"ZREM":    zremHandler,
+	"GEOADD":  geoAddHandler,
 }
