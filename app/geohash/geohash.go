@@ -12,7 +12,7 @@ func normalize(x float64, min float64, max float64) (int, error) {
 		return -1, fmt.Errorf("%f should lie between [%f, %f]", x, min, max)
 	}
 	_range := max - min
-	return int(((x - min) / _range) * (2 ^ 26)), nil
+	return int(((x - min) / _range) * (1 << 26)), nil
 }
 
 func interleave(x int, y int) int {
