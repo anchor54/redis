@@ -816,6 +816,35 @@ func geoPosHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToSimpleRespArray(result), nil
 }
 
+func geoDistHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 3 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	p1, p2 := args[1], args[2]
+	sortedSet, ok := store.GetInstance().GetSortedSet(key)
+	if !ok {
+		return -1, []string{}, utils.ToNullBulkString(), nil
+	}
+	
+	score1, ok := sortedSet.GetScore(p1)
+	if !ok {
+		return -1, []string{}, utils.ToNullBulkString(), nil 
+	}
+
+	score2, ok := sortedSet.GetScore(p2)
+	if !ok {
+		return -1, []string{}, utils.ToNullBulkString(), nil 
+	}
+
+	lat1, lon1 := geohash.DecodeCoordinates(int64(score1))
+	lat2, lon2 := geohash.DecodeCoordinates(int64(score2))
+	dist := geohash.GetHaversineDistance(lat1, lon1, lat2, lon2)
+	return -1, []string{}, utils.ToBulkString(strconv.FormatFloat(dist, 'f', -1, 64)), nil 
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":    pingHandler,
 	"ECHO":    echoHandler,
@@ -844,4 +873,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"ZREM":    zremHandler,
 	"GEOADD":  geoAddHandler,
 	"GEOPOS":  geoPosHandler,
+	"GEODIST":  geoDistHandler,
 }

@@ -1,13 +1,19 @@
 package geohash
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
-const LatMin float64 = -85.05112878
-const LatMax float64 = 85.05112878
-const LonMin float64 = -180
-const LonMax float64 = 180
-const LatRange float64 = LatMax - LatMin
-const LonRange float64 = LonMax - LonMin
+const (
+    LatMin float64 = -85.05112878
+    LatMax float64 = 85.05112878
+    LonMin float64 = -180
+    LonMax float64 = 180
+    LatRange float64 = LatMax - LatMin
+    LonRange float64 = LonMax - LonMin
+    EarthRadiusInMeters float64 = 6372797.560856
+)
 
 func normalize(x float64, min float64, max float64) (int, error) {
 	if x < min || x > max {
@@ -15,6 +21,10 @@ func normalize(x float64, min float64, max float64) (int, error) {
 	}
 	_range := max - min
 	return int(((x - min) / _range) * (1 << 26)), nil
+}
+
+func radians(deg float64) float64 {
+    return deg * math.Pi / float64(180)
 }
 
 func interleave(x int, y int) int {
@@ -112,4 +122,14 @@ func DecodeCoordinates(geoHash int64) (float64, float64) {
     gridLatInt := compactInt64ToInt32(geoHash)
     gridLonInt := compactInt64ToInt32(geoHash >> 1)
     return convertGridNumbersToCoordinates(gridLatInt, gridLonInt)
+}
+
+func GetHaversineDistance(lat1 float64, lon1 float64, lat2 float64, lon2 float64) float64 {
+   dLat := radians(lat2 - lat1)
+   dLon := radians(lon2 - lon1)
+   lat1 = radians(lat1)
+   lat2 = radians(lat2)
+   a := math.Pow(math.Sin(dLat / 2), 2) + math.Cos(lat1) * math.Cos(lat2) * math.Pow(math.Sin(dLon / 2), 2)
+   c := 2.0 * math.Asin(math.Sqrt(a))
+   return EarthRadiusInMeters * c
 }
