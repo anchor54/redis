@@ -2,10 +2,12 @@ package geohash
 
 import "fmt"
 
-const LatMin = -85.05112878
-const LatMax = 85.05112878
-const LonMin = -180
-const LonMax = 180
+const LatMin float64 = -85.05112878
+const LatMax float64 = 85.05112878
+const LonMin float64 = -180
+const LonMax float64 = 180
+const LatRange float64 = LatMax - LatMin
+const LonRange float64 = LonMax - LonMin
 
 func normalize(x float64, min float64, max float64) (int, error) {
 	if x < min || x > max {
@@ -56,7 +58,45 @@ func spreadInt32ToInt64(v int) int {
     return v
 }
 
-func GetCoordinateScore(lat float64, lon float64) (int, error) {
+func compactInt64ToInt32(v int64) int {
+    // Keep only the bits in even positions
+    v = v & 0x5555555555555555
+
+    // Before masking: w1   v1  ...   w2   v16  ... w31  v31  w32  v32
+    // After masking: 0   v1  ...   0   v16  ... 0  v31  0  v32
+
+    // Where w1, w2,..w31 are the digits from longitude if we're compacting latitude, or digits from latitude if we're compacting longitude
+    // So, we mask them out and only keep the relevant bits that we wish to compact
+
+    // ------
+    // Reverse the spreading process by shifting and masking
+    v = (v | (v >> 1)) & 0x3333333333333333
+    v = (v | (v >> 2)) & 0x0F0F0F0F0F0F0F0F
+    v = (v | (v >> 4)) & 0x00FF00FF00FF00FF
+    v = (v | (v >> 8)) & 0x0000FFFF0000FFFF
+    v = (v | (v >> 16)) & 0x00000000FFFFFFFF
+
+    // Before compacting: 0   v1  ...   0   v16  ... 0  v31  0  v32
+    // After compacting: v1  v2  ...  v31  v32
+    // -----
+    
+    return int(v)
+}
+
+func convertGridNumbersToCoordinates(gridLat int, gridLon int) (float64, float64) {
+    // Calculate the grid boundaries
+    gridLatMin := LatMin + LatRange * (float64(gridLat) / (1 << 26))
+    gridLatMax := LatMin + LatRange * (float64(gridLat + 1) / (1 << 26))
+    gridLongMin := LonMin + LonRange * (float64(gridLon) / (1 << 26))
+    gridLongMax := LonMin + LonRange * (float64(gridLon + 1) / (1 << 26))
+    
+    // Calculate the center point of the grid cell
+    latitude := (gridLatMin + gridLatMax) / 2
+    longitude := (gridLongMin + gridLongMax) / 2
+    return latitude, longitude
+}
+
+func EncodeCoordinates(lat float64, lon float64) (int, error) {
 	normalizedLat, err := normalize(lat, float64(LatMin), float64(LatMax))
 	if err != nil {
 		return -1, err
@@ -66,4 +106,10 @@ func GetCoordinateScore(lat float64, lon float64) (int, error) {
 		return -1, err
 	}
 	return interleave(normalizedLat, normalizedLon), nil
+}
+
+func DecodeCoordinates(geoHash int64) (float64, float64) {
+    gridLatInt := compactInt64ToInt32(geoHash)
+    gridLonInt := compactInt64ToInt32(geoHash >> 1)
+    return convertGridNumbersToCoordinates(gridLatInt, gridLonInt)
 }

@@ -768,7 +768,7 @@ func geoAddHandler(cmd *connection.Command) (int, []string, string, error) {
 			return -1, []string{}, "", fmt.Errorf("invalid longitude,latitude pair %f,%f", lon, lat)
 		} 
 
-		geoHash, err := geohash.GetCoordinateScore(lat, lon)
+		geoHash, err := geohash.EncodeCoordinates(lat, lon)
 		if err != nil {
 			return -1, []string{}, "", err
 		}
@@ -781,6 +781,39 @@ func geoAddHandler(cmd *connection.Command) (int, []string, string, error) {
 	fmt.Println(locations)
 	
 	return -1, []string{}, utils.ToRespInt(sortedSet.Add(locations)), nil
+}
+
+func geoPosHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 2 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	members := args[1:]
+	result := make([]string, len(members))
+	sortedSet, ok := store.GetInstance().GetSortedSet(key)
+	if !ok {
+		for i := range members {
+			result[i] = utils.ToArray(nil)
+		}
+		return -1, []string{}, utils.ToSimpleRespArray(result), nil
+	}
+	
+	for i, member := range members {
+		score, ok := sortedSet.GetScore(member)
+		if !ok {
+			result[i] = utils.ToArray(nil)
+			continue
+		}
+		lat, lon := geohash.DecodeCoordinates(int64(score))
+		result[i] = utils.ToArray([]string{
+			strconv.FormatFloat(lon, 'f', -1, 64),
+			strconv.FormatFloat(lat, 'f', -1, 64),
+		})
+	}
+
+	return -1, []string{}, utils.ToSimpleRespArray(result), nil
 }
 
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
@@ -810,4 +843,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"ZSCORE":  zscoreHandler,
 	"ZREM":    zremHandler,
 	"GEOADD":  geoAddHandler,
+	"GEOPOS":  geoPosHandler,
 }
