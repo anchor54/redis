@@ -901,7 +901,13 @@ func aclHandler(cmd *connection.Command) (int, []string, string, error) {
 		return -1, []string{}, "", ErrInvalidArguments
 	}
 
-	return -1, []string{}, utils.ToBulkString("default"), nil
+	switch args[1] {
+	case "WHOAMI":
+		return -1, []string{}, utils.ToBulkString("default"), nil
+	case "GETUSER":
+		return -1, []string{}, utils.ToSimpleRespArray([]string{utils.ToBulkString("flags"), utils.ToArray([]string{})}), nil
+	}
+	return -1, []string{}, "", nil
 }
 
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
