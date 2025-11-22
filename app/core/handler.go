@@ -620,20 +620,20 @@ func zaddHandler(cmd *connection.Command) (int, []string, string, error) {
 	}
 	key := args[0]
 	args = args[1:]
-	if len(args) % 2 != 0 {
+	if len(args)%2 != 0 {
 		return -1, []string{}, "", ErrInvalidArguments
 	}
 
 	db := store.GetInstance()
 	sortedSet, _ := db.LoadOrStoreSortedSet(key)
-	kvList := make([]ds.KeyValue, len(args) / 2)
-	
+	kvList := make([]ds.KeyValue, len(args)/2)
+
 	for i := 0; i < len(args); i += 2 {
 		score, err := strconv.ParseFloat(args[i], 64)
 		if err != nil {
 			return -1, []string{}, "", errors.New(err.Error())
 		}
-		kvList[i/2] = ds.KeyValue{Key: args[i + 1], Value: score}
+		kvList[i/2] = ds.KeyValue{Key: args[i+1], Value: score}
 	}
 
 	numAddedValues := sortedSet.Add(kvList)
@@ -647,7 +647,7 @@ func zrankHandler(cmd *connection.Command) (int, []string, string, error) {
 	}
 
 	key := args[0]
-	
+
 	sortedSet, _ := store.GetInstance().LoadOrStoreSortedSet(key)
 	rank := sortedSet.GetRank(args[1])
 
@@ -668,7 +668,7 @@ func zrangeHandler(cmd *connection.Command) (int, []string, string, error) {
 	if err != nil {
 		return -1, []string{}, "", errors.New(err.Error())
 	}
-	
+
 	end, err := strconv.ParseInt(args[2], 10, 64)
 	if err != nil {
 		return -1, []string{}, "", errors.New(err.Error())
@@ -679,7 +679,7 @@ func zrangeHandler(cmd *connection.Command) (int, []string, string, error) {
 		return -1, []string{}, utils.ToArray([]string{}), nil
 	}
 	result := sortedSet.GetRange(int(start), int(end))
-	
+
 	members := make([]string, len(result))
 	for i := 0; i < len(result); i++ {
 		members[i] = result[i].Key
@@ -714,7 +714,7 @@ func zscoreHandler(cmd *connection.Command) (int, []string, string, error) {
 	if !ok {
 		return -1, []string{}, utils.ToNullBulkString(), nil
 	}
-	
+
 	score, ok := sortedSet.GetScore(args[1])
 	if !ok {
 		return -1, []string{}, utils.ToNullBulkString(), nil
@@ -734,7 +734,7 @@ func zremHandler(cmd *connection.Command) (int, []string, string, error) {
 	if !ok {
 		return -1, []string{}, utils.ToRespInt(0), nil
 	}
-	
+
 	removeCount := sortedSet.Remove(args[1:]...)
 	return -1, []string{}, utils.ToRespInt(removeCount), nil
 }
@@ -749,37 +749,37 @@ func geoAddHandler(cmd *connection.Command) (int, []string, string, error) {
 	sortedSet, _ := store.GetInstance().LoadOrStoreSortedSet(key)
 
 	args = args[1:]
-	if len(args) % 3 != 0 {
+	if len(args)%3 != 0 {
 		return -1, []string{}, "", ErrInvalidArguments
 	}
 
-	locations := make([]ds.KeyValue, len(args) / 3)
+	locations := make([]ds.KeyValue, len(args)/3)
 	for i := 0; i < len(args); i += 3 {
 		lon, err := strconv.ParseFloat(args[i], 64)
 		if err != nil {
 			return -1, []string{}, "", err
 		}
-		lat, err := strconv.ParseFloat(args[i + 1], 64)
+		lat, err := strconv.ParseFloat(args[i+1], 64)
 		if err != nil {
 			return -1, []string{}, "", err
 		}
 
 		if lat < geohash.LatMin || lat > geohash.LatMax || lon < geohash.LonMin || lon > geohash.LonMax {
 			return -1, []string{}, "", fmt.Errorf("invalid longitude,latitude pair %f,%f", lon, lat)
-		} 
+		}
 
 		geoHash, err := geohash.EncodeCoordinates(lat, lon)
 		if err != nil {
 			return -1, []string{}, "", err
 		}
 
-		locations[i / 3] = ds.KeyValue{
-			Key: args[i + 2],
+		locations[i/3] = ds.KeyValue{
+			Key:   args[i+2],
 			Value: float64(geoHash),
 		}
 	}
 	fmt.Println(locations)
-	
+
 	return -1, []string{}, utils.ToRespInt(sortedSet.Add(locations)), nil
 }
 
@@ -799,7 +799,7 @@ func geoPosHandler(cmd *connection.Command) (int, []string, string, error) {
 		}
 		return -1, []string{}, utils.ToSimpleRespArray(result), nil
 	}
-	
+
 	for i, member := range members {
 		score, ok := sortedSet.GetScore(member)
 		if !ok {
@@ -828,50 +828,101 @@ func geoDistHandler(cmd *connection.Command) (int, []string, string, error) {
 	if !ok {
 		return -1, []string{}, utils.ToNullBulkString(), nil
 	}
-	
+
 	score1, ok := sortedSet.GetScore(p1)
 	if !ok {
-		return -1, []string{}, utils.ToNullBulkString(), nil 
+		return -1, []string{}, utils.ToNullBulkString(), nil
 	}
 
 	score2, ok := sortedSet.GetScore(p2)
 	if !ok {
-		return -1, []string{}, utils.ToNullBulkString(), nil 
+		return -1, []string{}, utils.ToNullBulkString(), nil
 	}
 
 	lat1, lon1 := geohash.DecodeCoordinates(int64(score1))
 	lat2, lon2 := geohash.DecodeCoordinates(int64(score2))
 	dist := geohash.GetHaversineDistance(lat1, lon1, lat2, lon2)
-	return -1, []string{}, utils.ToBulkString(strconv.FormatFloat(dist, 'f', -1, 64)), nil 
+	return -1, []string{}, utils.ToBulkString(strconv.FormatFloat(dist, 'f', -1, 64)), nil
+}
+
+func geoSearchHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 7 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	key := args[0]
+	lon, lat, radius, radiusUnit := args[2], args[3], args[5], args[6]
+	sortedSet, ok := store.GetInstance().GetSortedSet(key)
+	if !ok {
+		return -1, []string{}, utils.ToNullBulkString(), nil
+	}
+
+	radiusInMeters, err := strconv.ParseFloat(radius, 64)
+	if err != nil {
+		return -1, []string{}, "", err
+	}
+
+	if radiusUnit == "km" {
+		radiusInMeters *= 1000.0
+	}
+
+	longitude, err := strconv.ParseFloat(lon, 64)
+	if err != nil {
+		return -1, []string{}, "", err
+	}
+
+	latitude, err := strconv.ParseFloat(lat, 64)
+	if err != nil {
+		return -1, []string{}, "", err
+	}
+
+	ranges := geohash.GetSearchRanges(longitude, latitude, radiusInMeters)
+	uniqMembers := make(map[string]bool)
+	members := make([]string, 0)
+
+	for _, r := range ranges {
+		candidateMembers := sortedSet.GetRangeByValue(float64(r.Min), float64(r.Max))
+		for _, member := range candidateMembers {
+			lat, lon := geohash.DecodeCoordinates(int64(member.Value))
+			if !uniqMembers[member.Key] && geohash.GetHaversineDistance(lat, lon, latitude, longitude) <= radiusInMeters {
+				members = append(members, member.Key)
+				uniqMembers[member.Key] = true
+			}
+		}
+	}
+
+	return -1, []string{}, utils.ToArray(members), nil
 }
 
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
-	"PING":    pingHandler,
-	"ECHO":    echoHandler,
-	"SET":     setHandler,
-	"GET":     getHandler,
-	"LPUSH":   lpushHandler,
-	"RPUSH":   rpushHandler,
-	"LRANGE":  lrangeHandler,
-	"LLEN":    llenHandler,
-	"LPOP":    lpopHandler,
-	"BLPOP":   blpopHandler,
-	"TYPE":    typeHandler,
-	"XADD":    xaddHandler,
-	"XRANGE":  xrangeHandler,
-	"XREAD":   xreadHandler,
-	"INCR":    incrHandler,
-	"INFO":    infoHandler,
-	"CONFIG":  configHandler,
-	"KEYS":    keysHandler,
-	"PUBLISH": publishHandler,
-	"ZADD":    zaddHandler,
-	"ZRANK":   zrankHandler,
-	"ZRANGE":  zrangeHandler,
-	"ZCARD":   zcardHandler,
-	"ZSCORE":  zscoreHandler,
-	"ZREM":    zremHandler,
-	"GEOADD":  geoAddHandler,
-	"GEOPOS":  geoPosHandler,
-	"GEODIST":  geoDistHandler,
+	"PING":      pingHandler,
+	"ECHO":      echoHandler,
+	"SET":       setHandler,
+	"GET":       getHandler,
+	"LPUSH":     lpushHandler,
+	"RPUSH":     rpushHandler,
+	"LRANGE":    lrangeHandler,
+	"LLEN":      llenHandler,
+	"LPOP":      lpopHandler,
+	"BLPOP":     blpopHandler,
+	"TYPE":      typeHandler,
+	"XADD":      xaddHandler,
+	"XRANGE":    xrangeHandler,
+	"XREAD":     xreadHandler,
+	"INCR":      incrHandler,
+	"INFO":      infoHandler,
+	"CONFIG":    configHandler,
+	"KEYS":      keysHandler,
+	"PUBLISH":   publishHandler,
+	"ZADD":      zaddHandler,
+	"ZRANK":     zrankHandler,
+	"ZRANGE":    zrangeHandler,
+	"ZCARD":     zcardHandler,
+	"ZSCORE":    zscoreHandler,
+	"ZREM":      zremHandler,
+	"GEOADD":    geoAddHandler,
+	"GEOPOS":    geoPosHandler,
+	"GEODIST":   geoDistHandler,
+	"GEOSEARCH": geoSearchHandler,
 }

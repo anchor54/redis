@@ -98,6 +98,24 @@ func (ss *SortedSet) GetRange(start int, end int) []KeyValue {
 	return result
 }
 
+func (ss *SortedSet) GetRangeByValue(start float64, end float64) []KeyValue {
+	if start > end {
+		return []KeyValue{}
+	}
+
+	node, ok := ss.skipList.GetLowerBound(KeyValue{Key: "", Value: start})
+	if !ok {
+		return []KeyValue{}
+	}
+
+	result := make([]KeyValue, 0)
+	for ; node != nil && node.Value().Value <= end; node = node.GetNextNodeAtLevel(0) {
+		result = append(result, node.Value())
+	}
+
+	return result
+}
+
 func (ss *SortedSet) GetCardinality() int {
 	return ss.skipList.Len()
 }
