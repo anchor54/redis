@@ -3,7 +3,6 @@ package session
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 
 	"github.com/codecrafters-io/redis-starter-go/app/acl"
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
@@ -96,8 +95,6 @@ func (h *ACLHandler) Execute(cmd *connection.Command, conn *connection.RedisConn
 	case "SETUSER":
 		username = cmd.Args[1]
 		password := cmd.Args[2][1:]
-		fmt.Println("password", password)
-		fmt.Println("username", username)
 		info, err := setUserPassword(username, password)
 		if err != nil {
 			return err
