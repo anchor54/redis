@@ -2,6 +2,7 @@ package session
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 
 	"github.com/codecrafters-io/redis-starter-go/app/acl"
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
@@ -55,9 +56,8 @@ func setUserPassword(username string, password string) (string, error) {
 		return "", err.ErrUserNotFound
 	}
 
-	hash := sha256.New()
-	hash.Write([]byte(password))
-	user.Passwords = append(user.Passwords, string(hash.Sum(nil)))
+	hash := sha256.Sum256([]byte(password))
+	user.Passwords = append(user.Passwords, hex.EncodeToString(hash[:]))
 	// Remove "nopass" flag if it exists
 	newFlags := []string{}
 	for _, flag := range user.Flags {
