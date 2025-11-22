@@ -43,11 +43,8 @@ func (h *ACLHandler) Execute(cmd *connection.Command, conn *connection.RedisConn
 		response := []string{
 			utils.ToBulkString("flags"),
 			utils.ToArray(user.Flags),
-		}
-
-		if len(user.Passwords) > 0 {
-			response = append(response, utils.ToBulkString("passwords"))
-			response = append(response, utils.ToArray(user.Passwords))
+			utils.ToBulkString("passwords"),
+			utils.ToArray(user.Passwords),
 		}
 
 		if len(user.Keys) > 0 {
