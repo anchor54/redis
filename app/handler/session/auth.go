@@ -32,6 +32,8 @@ func (h *AuthHandler) Execute(cmd *connection.Command, conn *connection.RedisCon
 		return nil
 	}
 
+	conn.SetAuthenticated(true)
+	conn.SetUsername(username)
 	conn.SendResponse(utils.ToSimpleString("OK"))
 	return nil
 }

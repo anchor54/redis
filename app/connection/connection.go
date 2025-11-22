@@ -171,3 +171,7 @@ func (conn *RedisConnection) GetUsername() string {
 func (conn *RedisConnection) IsAuthenticated() bool {
 	return conn.authenticated
 }
+
+func (conn *RedisConnection) SetAuthenticated(authenticated bool) {
+	conn.authenticated = authenticated
+}
