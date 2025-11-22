@@ -7,7 +7,7 @@ import (
 )
 
 type KeyValue struct {
-	Key string
+	Key   string
 	Value float64
 }
 
@@ -19,14 +19,14 @@ func (kv KeyValue) Compare(other KeyValue) int {
 }
 
 type SortedSet struct {
-	skipList	*skiplist.SkipList[KeyValue]
-	score		map[string]float64
+	skipList *skiplist.SkipList[KeyValue]
+	score    map[string]float64
 }
 
 func NewSortedSet() *SortedSet {
 	return &SortedSet{
-		skipList:	skiplist.NewComparableSkipList[KeyValue](),
-		score:		make(map[string]float64),
+		skipList: skiplist.NewComparableSkipList[KeyValue](),
+		score:    make(map[string]float64),
 	}
 }
 
@@ -46,8 +46,10 @@ func (ss *SortedSet) Add(args []KeyValue) int {
 	for _, keyValue := range args {
 		if _, ok := ss.score[keyValue.Key]; !ok {
 			count++
-			ss.skipList.Add(keyValue)
+		} else {
+			ss.skipList.Delete(keyValue)
 		}
+		ss.skipList.Add(keyValue)
 		ss.score[keyValue.Key] = keyValue.Value
 	}
 	return count
@@ -72,11 +74,11 @@ func (ss *SortedSet) GetRange(start int, end int) []KeyValue {
 	}
 
 	if start < 0 {
-		start = max(0, start + ss.skipList.Len())
+		start = max(0, start+ss.skipList.Len())
 	}
 
 	if end < 0 {
-		end = max(0, end + ss.skipList.Len())
+		end = max(0, end+ss.skipList.Len())
 	}
 
 	if start > end {
@@ -131,7 +133,7 @@ func (ss *SortedSet) Remove(keys ...string) int {
 		if _, ok := ss.score[key]; !ok {
 			continue
 		}
-	
+
 		ss.skipList.Delete(KeyValue{Key: key, Value: ss.score[key]})
 		delete(ss.score, key)
 		count++

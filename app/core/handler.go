@@ -895,6 +895,15 @@ func geoSearchHandler(cmd *connection.Command) (int, []string, string, error) {
 	return -1, []string{}, utils.ToArray(members), nil
 }
 
+func aclHandler(cmd *connection.Command) (int, []string, string, error) {
+	args := cmd.Args
+	if len(args) < 1 {
+		return -1, []string{}, "", ErrInvalidArguments
+	}
+
+	return -1, []string{}, utils.ToBulkString("default"), nil
+}
+
 var Handlers = map[string]func(*connection.Command) (int, []string, string, error){
 	"PING":      pingHandler,
 	"ECHO":      echoHandler,
@@ -925,4 +934,5 @@ var Handlers = map[string]func(*connection.Command) (int, []string, string, erro
 	"GEOPOS":    geoPosHandler,
 	"GEODIST":   geoDistHandler,
 	"GEOSEARCH": geoSearchHandler,
+	"ACL":       aclHandler,
 }
