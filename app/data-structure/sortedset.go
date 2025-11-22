@@ -47,7 +47,7 @@ func (ss *SortedSet) Add(args []KeyValue) int {
 		if _, ok := ss.score[keyValue.Key]; !ok {
 			count++
 		} else {
-			ss.skipList.Delete(keyValue)
+			ss.skipList.Delete(KeyValue{Key: keyValue.Key, Value: ss.score[keyValue.Key]})
 		}
 		ss.skipList.Add(keyValue)
 		ss.score[keyValue.Key] = keyValue.Value
