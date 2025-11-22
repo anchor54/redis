@@ -3,6 +3,7 @@ package connection
 import (
 	"net"
 
+	"github.com/codecrafters-io/redis-starter-go/app/acl"
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
@@ -18,6 +19,7 @@ type RedisConnection struct {
 	isMaster         bool
 	inPubSubMode     bool
 	username         string // Username for access control
+	authenticated    bool
 }
 
 type Command struct {
@@ -27,6 +29,16 @@ type Command struct {
 }
 
 func NewRedisConnection(conn net.Conn) *RedisConnection {
+	userManager := acl.GetInstance()
+	user, exists := userManager.GetUser("default")
+	if !exists {
+		userManager.SetUser(&acl.User{
+			Username: "default",
+			Flags:    []string{"nopass"},
+			Passwords: []string{},
+		})
+	}
+	
 	return &RedisConnection{
 		ID:               uuid.New().String(),
 		conn:             conn,
@@ -35,6 +47,7 @@ func NewRedisConnection(conn net.Conn) *RedisConnection {
 		suppressResponse: false,
 		isMaster:         false,
 		username:         "default", // Default user for unauthenticated connections
+		authenticated:    user.IsEnabled() && len(user.Passwords) == 0,
 	}
 }
 
@@ -153,4 +166,8 @@ func (conn *RedisConnection) SetUsername(username string) {
 // GetUsername returns the username associated with this connection
 func (conn *RedisConnection) GetUsername() string {
 	return conn.username
+}
+
+func (conn *RedisConnection) IsAuthenticated() bool {
+	return conn.authenticated
 }

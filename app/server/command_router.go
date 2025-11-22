@@ -9,10 +9,17 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
 	"github.com/codecrafters-io/redis-starter-go/app/handler/session"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
+	err "github.com/codecrafters-io/redis-starter-go/app/error"
 )
 
 // Route routes a command to the appropriate handler
 func Route(conn *connection.RedisConnection, cmdName string, args []string) {
+	// Check if the connection is authenticated
+	if !conn.IsAuthenticated() && cmdName != "AUTH" {
+		conn.SendResponse(fmt.Sprintf("-%s\r\n", err.ErrAuthenticationRequired.Error()))
+		return
+	}
+
 	// Check if we're in a transaction and should queue commands
 	if conn.IsInTransaction() && !isTransactionControlCommand(cmdName) {
 		queueCommand(conn, cmdName, args)

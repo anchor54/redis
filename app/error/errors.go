@@ -11,4 +11,5 @@ var (
 	ErrInvalidArguments = errors.New("invalid arguments")
 	ErrUserNotFound = errors.New("user not found")
 	ErrInvalidUserPassword = errors.New("WRONGPASS invalid username-password pair or user is disabled.")
+	ErrAuthenticationRequired = errors.New("NOAUTH Authentication required.")
 )

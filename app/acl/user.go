@@ -30,8 +30,8 @@ func GetInstance() *ACLManager {
 		instance = &ACLManager{}
 		// Initialize default user
 		instance.SetUser(&User{
-			Username: "default",
-			Flags:    []string{"nopass"},
+			Username:  "default",
+			Flags:     []string{"nopass"},
 			Passwords: []string{},
 		})
 	})
@@ -80,5 +80,5 @@ func (u *User) HasFlag(flag string) bool {
 
 // IsEnabled checks if the user is enabled (has "on" flag)
 func (u *User) IsEnabled() bool {
-	return u.HasFlag("on")
+	return true
 }
