@@ -36,7 +36,7 @@ func Route(conn *connection.RedisConnection, cmdName string, args []string) {
 		cmd := connection.CreateCommand(cmdName, args...)
 
 		// Execute the session handler
-		_, _, _, handlerErr := handler.Execute(&cmd, conn)
+		handlerErr := handler.Execute(&cmd, conn)
 		if handlerErr != nil {
 			conn.SendError(handlerErr.Error())
 		}

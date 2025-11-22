@@ -19,9 +19,9 @@ import (
 // ReplconfHandler handles the REPLCONF command
 type ReplconfHandler struct{}
 
-func (h *ReplconfHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *ReplconfHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if len(cmd.Args) < 2 {
-		return -1, []string{}, "", err.ErrInvalidArguments
+		return err.ErrInvalidArguments
 	}
 
 	// Implement proper REPLCONF handling based on args
@@ -37,13 +37,13 @@ func (h *ReplconfHandler) Execute(cmd *connection.Command, conn *connection.Redi
 	case "listening-port":
 		port, err := strconv.Atoi(args[1])
 		if err != nil {
-			return -1, []string{}, "", err
+			return err
 		}
 		replicaInfo.ListeningPort = port
 	case "capa":
 		for len(args) > 1 {
 			if args[0] != "capa" {
-				return -1, []string{}, "", err.ErrInvalidArguments
+				return err.ErrInvalidArguments
 			}
 			replicaInfo.AddCapability(args[1])
 			args = args[2:]
@@ -57,35 +57,35 @@ func (h *ReplconfHandler) Execute(cmd *connection.Command, conn *connection.Redi
 			[]string{"REPLCONF", "ACK", strconv.Itoa(offset)},
 		))
 		conn.SetSuppressResponse(true)
-		return -1, []string{}, "", nil
+		return nil
 
 	case "ack":
 		// NEW: replica tells us the offset it has processed
 		offset, err := strconv.Atoi(args[1])
 		if err != nil {
-			return -1, []string{}, "", err
+			return err
 		}
 		replicaInfo.LastAckOffset = offset
 		logger.Debug("Replica ACK received", "address", conn.GetAddress(), "offset", offset)
 		// For ACK we don't send any response back
-		return -1, []string{}, "", nil
+		return nil
 	}
 
 	conn.SendResponse(utils.ToSimpleString("OK"))
-	return -1, []string{}, "", nil
+	return nil
 }
 
 // PsyncHandler handles the PSYNC command
 type PsyncHandler struct{}
 
-func (h *PsyncHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *PsyncHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if len(cmd.Args) < 2 {
-		return -1, []string{}, "", err.ErrInvalidArguments
+		return err.ErrInvalidArguments
 	}
 	replicationID := cmd.Args[0]
 	_, err := strconv.Atoi(cmd.Args[1])
 	if err != nil {
-		return -1, []string{}, "", err
+		return err
 	}
 
 	cfg := config.GetInstance()
@@ -97,12 +97,12 @@ func (h *PsyncHandler) Execute(cmd *connection.Command, conn *connection.RedisCo
 		hexData, err := os.ReadFile(rdbPath)
 		if err != nil {
 			logger.Error("Failed to read RDB file", "path", rdbPath, "error", err)
-			return -1, []string{}, "", err
+			return err
 		}
 		// Decode hex string to bytes
 		file, err := hex.DecodeString(string(hexData))
 		if err != nil {
-			return -1, []string{}, "", err
+			return err
 		}
 		conn.SendResponse(fmt.Sprintf("$%d\r\n%s", len(file), file))
 
@@ -117,30 +117,30 @@ func (h *PsyncHandler) Execute(cmd *connection.Command, conn *connection.RedisCo
 			}
 		}
 
-		return -1, []string{}, "", nil
+		return nil
 	}
 
 	conn.SendResponse(utils.ToSimpleString("OK"))
-	return -1, []string{}, "", nil
+	return nil
 }
 
 // WaitHandler handles the WAIT command
 type WaitHandler struct{}
 
-func (h *WaitHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *WaitHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if len(cmd.Args) < 2 {
-		return -1, []string{}, "", err.ErrInvalidArguments
+		return err.ErrInvalidArguments
 	}
 	replicasToWaitFor, err := strconv.Atoi(cmd.Args[0])
 	if err != nil {
-		return -1, []string{}, "", err
+		return err
 	}
 	timeout, err := strconv.Atoi(cmd.Args[1])
 	if err != nil {
-		return -1, []string{}, "", err
+		return err
 	}
 
 	updatedReplicas := replication.GetManager().WaitForReplicas(replicasToWaitFor, timeout)
 	conn.SendResponse(utils.ToRespInt(updatedReplicas))
-	return -1, []string{}, "", nil
+	return nil
 }

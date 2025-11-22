@@ -10,9 +10,9 @@ import (
 // SubscribeHandler handles the SUBSCRIBE command
 type SubscribeHandler struct{}
 
-func (h *SubscribeHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *SubscribeHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if len(cmd.Args) < 1 {
-		return -1, []string{}, "", err.ErrInvalidArguments
+		return err.ErrInvalidArguments
 	}
 	channel := cmd.Args[0]
 	pubsubManager := pubsub.GetManager()
@@ -24,15 +24,15 @@ func (h *SubscribeHandler) Execute(cmd *connection.Command, conn *connection.Red
 			utils.ToRespInt(channels),
 		}),
 	)
-	return -1, []string{}, "", nil // Return empty response since we sent it directly
+	return nil
 }
 
 // UnsubscribeHandler handles the UNSUBSCRIBE command
 type UnsubscribeHandler struct{}
 
-func (h *UnsubscribeHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *UnsubscribeHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if len(cmd.Args) < 1 {
-		return -1, []string{}, "", err.ErrInvalidArguments
+		return err.ErrInvalidArguments
 	}
 	channel := cmd.Args[0]
 	pubsubManager := pubsub.GetManager()
@@ -44,6 +44,6 @@ func (h *UnsubscribeHandler) Execute(cmd *connection.Command, conn *connection.R
 			utils.ToRespInt(channels),
 		}),
 	)
-	return -1, []string{}, "", nil // Return empty response since we sent it directly
+	return nil
 }
 

@@ -9,21 +9,21 @@ import (
 // MultiHandler handles the MULTI command
 type MultiHandler struct{}
 
-func (h *MultiHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *MultiHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	resp, multiErr := conn.StartTransaction()
 	if multiErr != nil {
-		return -1, []string{}, "", multiErr
+		return multiErr
 	}
 	conn.SendResponse(resp)
-	return -1, []string{}, "", nil // Return empty response since we sent it directly
+	return nil
 }
 
 // ExecHandler handles the EXEC command
 type ExecHandler struct{}
 
-func (h *ExecHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *ExecHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if !conn.IsInTransaction() {
-		return -1, []string{}, "", err.ErrExecWithoutMulti
+		return err.ErrExecWithoutMulti
 	}
 
 	conn.EndTransaction()
@@ -34,17 +34,17 @@ func (h *ExecHandler) Execute(cmd *connection.Command, conn *connection.RedisCon
 	command.GetQueueInstance().EnqueueTransaction(&transaction)
 	response := <-transaction.Response
 	conn.SendResponse(response)
-	return -1, []string{}, "", nil // Return empty response since we sent it directly
+	return nil
 }
 
 // DiscardHandler handles the DISCARD command
 type DiscardHandler struct{}
 
-func (h *DiscardHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func (h *DiscardHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	response, discardErr := conn.DiscardTransaction()
 	if discardErr != nil {
-		return -1, []string{}, "", discardErr
+		return discardErr
 	}
 	conn.SendResponse(response)
-	return -1, []string{}, "", nil // Return empty response since we sent it directly
+	return nil
 }

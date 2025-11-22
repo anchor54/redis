@@ -9,4 +9,5 @@ var (
 	ErrDiscardWithoutMulti = errors.New("DISCARD without MULTI")
 	ErrFailedToLoadOrStoreList = errors.New("failed to load or store list")
 	ErrInvalidArguments = errors.New("invalid arguments")
+	ErrUserNotFound = errors.New("user not found")
 )

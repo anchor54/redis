@@ -4,7 +4,7 @@ import "github.com/codecrafters-io/redis-starter-go/app/connection"
 
 // SessionHandler is the interface that all session handlers must implement
 type SessionHandler interface {
-	Execute(cmd *connection.Command, conn *connection.RedisConnection) (timeout int, keys []string, response string, err error)
+	Execute(cmd *connection.Command, conn *connection.RedisConnection) error
 }
 
 var SessionHandlers = map[string]SessionHandler{

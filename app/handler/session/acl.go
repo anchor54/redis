@@ -1,6 +1,9 @@
 package session
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/codecrafters-io/redis-starter-go/app/acl"
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	err "github.com/codecrafters-io/redis-starter-go/app/error"
@@ -10,62 +13,96 @@ import (
 // ACLHandler handles the ACL command
 type ACLHandler struct{}
 
-func (h *ACLHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) (int, []string, string, error) {
+func getUserInfo(username string) (string, error) {
+	manager := acl.GetInstance()
+
+	// Get user info for the specified username (or current user if not specified)
+	user, exists := manager.GetUser(username)
+	if !exists {
+		return "", err.ErrUserNotFound
+	}
+
+	// Build response array with user info
+	// Format: ["flags", ["on", "allkeys"], "passwords", [...], ...]
+	response := []string{
+		utils.ToBulkString("flags"),
+		utils.ToArray(user.Flags),
+		utils.ToBulkString("passwords"),
+		utils.ToArray(user.Passwords),
+	}
+
+	if len(user.Keys) > 0 {
+		response = append(response, utils.ToBulkString("keys"))
+		response = append(response, utils.ToArray(user.Keys))
+	}
+
+	if len(user.Commands) > 0 {
+		response = append(response, utils.ToBulkString("commands"))
+		response = append(response, utils.ToArray(user.Commands))
+	}
+
+	if len(user.Channels) > 0 {
+		response = append(response, utils.ToBulkString("channels"))
+		response = append(response, utils.ToArray(user.Channels))
+	}
+
+	return utils.ToSimpleRespArray(response), nil
+}
+
+func setUserPassword(username string, password string) (string, error) {
+	manager := acl.GetInstance()
+	user, exists := manager.GetUser(username)
+	if !exists {
+		return "", err.ErrUserNotFound
+	}
+
+	hash := sha256.New()
+	hash.Write([]byte(password))
+	user.Passwords = append(user.Passwords, hex.EncodeToString(hash.Sum(nil)))
+	// Remove "nopass" flag if it exists
+	newFlags := []string{}
+	for _, flag := range user.Flags {
+		if flag != "nopass" {
+			newFlags = append(newFlags, flag)
+		}
+	}
+	user.Flags = newFlags
+	manager.SetUser(user)
+	return utils.ToSimpleString("OK"), nil
+}
+
+func (h *ACLHandler) Execute(cmd *connection.Command, conn *connection.RedisConnection) error {
 	if len(cmd.Args) < 1 {
-		return -1, []string{}, "", err.ErrInvalidArguments
+		return err.ErrInvalidArguments
 	}
 
 	subcommand := cmd.Args[0]
 	username := conn.GetUsername()
-	manager := acl.GetInstance()
 
 	switch subcommand {
 	case "WHOAMI":
 		// Return the username of the connection that issued this command
 		conn.SendResponse(utils.ToBulkString(username))
-		return -1, []string{}, "", nil
+		return nil
 
 	case "GETUSER":
-		// Get user info for the specified username (or current user if not specified)
-		targetUsername := username
-		if len(cmd.Args) > 1 {
-			targetUsername = cmd.Args[1]
+		info, err := getUserInfo(username)
+		if err != nil {
+			return err
 		}
+		conn.SendResponse(info)
+		return nil
 
-		user, exists := manager.GetUser(targetUsername)
-		if !exists {
-			conn.SendError("User " + targetUsername + " not found")
-			return -1, []string{}, "", nil
+	case "SETUSER":
+		password := cmd.Args[1]
+		info, err := setUserPassword(username, password)
+		if err != nil {
+			return err
 		}
-
-		// Build response array with user info
-		// Format: ["flags", ["on", "allkeys"], "passwords", [...], ...]
-		response := []string{
-			utils.ToBulkString("flags"),
-			utils.ToArray(user.Flags),
-			utils.ToBulkString("passwords"),
-			utils.ToArray(user.Passwords),
-		}
-
-		if len(user.Keys) > 0 {
-			response = append(response, utils.ToBulkString("keys"))
-			response = append(response, utils.ToArray(user.Keys))
-		}
-
-		if len(user.Commands) > 0 {
-			response = append(response, utils.ToBulkString("commands"))
-			response = append(response, utils.ToArray(user.Commands))
-		}
-
-		if len(user.Channels) > 0 {
-			response = append(response, utils.ToBulkString("channels"))
-			response = append(response, utils.ToArray(user.Channels))
-		}
-
-		conn.SendResponse(utils.ToSimpleRespArray(response))
-		return -1, []string{}, "", nil
+		conn.SendResponse(info)
+		return nil
 	}
 
 	conn.SendError("Unknown ACL subcommand: " + subcommand)
-	return -1, []string{}, "", nil
+	return nil
 }
