@@ -1,7 +1,6 @@
 package server
 
 import (
-	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 )
 
@@ -12,10 +11,9 @@ type Server interface {
 }
 
 // NewServer creates a new server based on the configuration
-func NewServer(cfg *config.Config, queue *command.Queue) Server {
+func NewServer(cfg *config.Config) Server {
 	if cfg.Role == config.Master {
-		return NewMasterServer(cfg, queue)
+		return NewMasterServer(cfg)
 	}
-	return NewReplicaServer(cfg, queue)
+	return NewReplicaServer(cfg)
 }
-

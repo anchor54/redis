@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
@@ -23,14 +22,12 @@ import (
 // ReplicaServer represents a Redis replica server
 type ReplicaServer struct {
 	config         *config.Config
-	sessionHandler *SessionHandler
 }
 
 // NewReplicaServer creates a new replica server
-func NewReplicaServer(cfg *config.Config, queue *command.Queue) *ReplicaServer {
+func NewReplicaServer(cfg *config.Config) *ReplicaServer {
 	return &ReplicaServer{
 		config:         cfg,
-		sessionHandler: NewSessionHandler(queue),
 	}
 }
 
@@ -55,7 +52,7 @@ func (rs *ReplicaServer) Start() error {
 		defer masterConn.Close()
 
 		// This will block on the master link, but only in this goroutine
-		rs.sessionHandler.HandleWithInitialData(masterConn, remainingData)
+		HandleWithInitialData(masterConn, remainingData)
 	}()
 
 	// 2) Use the listener loop to keep the server process alive
@@ -74,7 +71,7 @@ func (rs *ReplicaServer) handleConnection(listener *net.Listener) {
 		}
 
 		logger.Debug("New connection accepted", "remote", conn.RemoteAddr())
-		go rs.sessionHandler.Handle(connection.NewRedisConnection(conn))
+		go Handle(connection.NewRedisConnection(conn))
 	}
 }
 

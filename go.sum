@@ -1,9 +1,3 @@
-github.com/anchor54/SkipList v1.0.1 h1:W+zSxCke6eLuXZp/N9fOc3H79LQ8PWiRHoNzXhG0H0E=
-github.com/anchor54/SkipList v1.0.1/go.mod h1:hXy+lWB2dciAOs6Aqz+s2C2aSs7bWH+vakXdtBsRAlE=
-github.com/anchor54/SkipList v1.1.0 h1:uxZIT1FdE7r5M8sMsk6zw6tIUikaX3msvbMZv5BxpPs=
-github.com/anchor54/SkipList v1.1.0/go.mod h1:hXy+lWB2dciAOs6Aqz+s2C2aSs7bWH+vakXdtBsRAlE=
-github.com/anchor54/SkipList v1.2.0 h1:ZFZPUGZAYFrQW2vUQTE14gq0YE+2IE704HMQs+qI3GM=
-github.com/anchor54/SkipList v1.2.0/go.mod h1:hXy+lWB2dciAOs6Aqz+s2C2aSs7bWH+vakXdtBsRAlE=
 github.com/anchor54/SkipList v1.3.0 h1:lI9MVN8yeDmFFG/4OmcgteowNph3OgLhEnDJJned+AQ=
 github.com/anchor54/SkipList v1.3.0/go.mod h1:hXy+lWB2dciAOs6Aqz+s2C2aSs7bWH+vakXdtBsRAlE=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=

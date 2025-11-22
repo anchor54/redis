@@ -1,7 +1,10 @@
 package command
 
 import (
+	"sync"
+
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
+	"github.com/codecrafters-io/redis-starter-go/app/constants"
 )
 
 // Queue manages command and transaction queues
@@ -16,7 +19,23 @@ type Transaction struct {
 	Response chan string
 }
 
-// NewQueue creates a new command queue
+var (
+	instance *Queue
+	once     sync.Once
+)
+
+// GetQueueInstance returns the singleton queue instance
+func GetQueueInstance() *Queue {
+	once.Do(func() {
+		instance = &Queue{
+			cmdQueue:     make(chan *connection.Command, constants.DefaultCommandQueueSize),
+			transactions: make(chan *Transaction, constants.DefaultTransactionQueueSize),
+		}
+	})
+	return instance
+}
+
+// NewQueue creates a new command queue (deprecated: use GetInstance instead)
 func NewQueue(cmdQueueSize, transactionQueueSize int) *Queue {
 	return &Queue{
 		cmdQueue:     make(chan *connection.Command, cmdQueueSize),

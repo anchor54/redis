@@ -4,7 +4,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/constants"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/handler"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/replication"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
@@ -17,16 +17,14 @@ func isWriteCommand(cmdName string) bool {
 
 // Executor handles command and transaction execution
 type Executor struct {
-	queue           *command.Queue
 	blockingMgr     *BlockingCommandManager
 	transactionExec *TransactionExecutor
 }
 
 // NewExecutor creates a new executor
-func NewExecutor(queue *command.Queue) *Executor {
+func NewExecutor() *Executor {
 	blockingMgr := NewBlockingCommandManager()
 	return &Executor{
-		queue:           queue,
 		blockingMgr:     blockingMgr,
 		transactionExec: NewTransactionExecutor(blockingMgr),
 	}
@@ -34,11 +32,12 @@ func NewExecutor(queue *command.Queue) *Executor {
 
 // Start begins the executor's event loop
 func (e *Executor) Start() {
+	queue := command.GetQueueInstance()
 	for {
 		select {
-		case cmd := <-e.queue.CommandQueue():
+		case cmd := <-queue.CommandQueue():
 			e.handleCommand(cmd)
-		case trans := <-e.queue.TransactionQueue():
+		case trans := <-queue.TransactionQueue():
 			e.transactionExec.Execute(trans)
 		}
 	}
@@ -46,14 +45,14 @@ func (e *Executor) Start() {
 
 // handleCommand processes a single command
 func (e *Executor) handleCommand(cmd *connection.Command) {
-	handler, ok := core.Handlers[cmd.Command]
+	cmdHandler, ok := handler.Handlers[cmd.Command]
 	if !ok {
 		logger.Warn("Unknown command", "command", cmd.Command)
 		cmd.Response <- utils.ToError("unknown command: " + cmd.Command)
 		return
 	}
 
-	timeout, keys, resp, err := handler(cmd)
+	timeout, keys, resp, err := cmdHandler.Execute(cmd)
 	logger.Debug("Command executed", "command", cmd.Command, "timeout", timeout, "keys", keys, "error", err)
 
 	// if the command is blocking, add it to the blocking commands map

@@ -5,7 +5,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
@@ -14,14 +13,12 @@ import (
 // MasterServer represents a Redis master server
 type MasterServer struct {
 	config         *config.Config
-	sessionHandler *SessionHandler
 }
 
 // NewMasterServer creates a new master server
-func NewMasterServer(cfg *config.Config, queue *command.Queue) *MasterServer {
+func NewMasterServer(cfg *config.Config) *MasterServer {
 	return &MasterServer{
 		config:         cfg,
-		sessionHandler: NewSessionHandler(queue),
 	}
 }
 
@@ -45,7 +42,7 @@ func (ms *MasterServer) Start() error {
 		}
 
 		logger.Debug("New connection accepted", "remote", conn.RemoteAddr())
-		go ms.sessionHandler.Handle(connection.NewRedisConnection(conn))
+		go Handle(connection.NewRedisConnection(conn))
 	}
 }
 

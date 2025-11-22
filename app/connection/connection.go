@@ -17,6 +17,7 @@ type RedisConnection struct {
 	suppressResponse bool
 	isMaster         bool
 	inPubSubMode     bool
+	username         string // Username for access control
 }
 
 type Command struct {
@@ -33,6 +34,7 @@ func NewRedisConnection(conn net.Conn) *RedisConnection {
 		queuedCommands:   make([]Command, 0),
 		suppressResponse: false,
 		isMaster:         false,
+		username:         "default", // Default user for unauthenticated connections
 	}
 }
 
@@ -141,4 +143,14 @@ func (conn *RedisConnection) ExitPubSubMode() {
 
 func (conn *RedisConnection) IsInPubSubMode() bool {
 	return conn.inPubSubMode
+}
+
+// SetUsername sets the username for this connection
+func (conn *RedisConnection) SetUsername(username string) {
+	conn.username = username
+}
+
+// GetUsername returns the username associated with this connection
+func (conn *RedisConnection) GetUsername() string {
+	return conn.username
 }

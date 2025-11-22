@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/connection"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/handler"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -55,7 +55,7 @@ func (bcm *BlockingCommandManager) UnblockCommandsWaitingForKey(keys []string) {
 		for i, blockedCmd := range blockedCommands {
 			command := blockedCmd.Command
 			logger.Debug("Executing blocked command", "command", command.Command, "args", command.Args)
-			handler, ok := core.Handlers[command.Command]
+			cmdHandler, ok := handler.Handlers[command.Command]
 			if !ok {
 				logger.Warn("Unknown command in blocked queue", "command", command.Command)
 				command.Response <- utils.ToError("unknown command: " + command.Command)
@@ -63,7 +63,7 @@ func (bcm *BlockingCommandManager) UnblockCommandsWaitingForKey(keys []string) {
 			}
 			// Here we assume that the command won't unblock another command (causing a chain reaction)
 			// and so we ignore the keys that were set in its execution
-			timeout, _, resp, err := handler(command)
+			timeout, _, resp, err := cmdHandler.Execute(command)
 			logger.Debug("Blocked command executed", "command", command.Command, "timeout", timeout, "error", err)
 			if timeout >= 0 {
 				break

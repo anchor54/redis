@@ -2,7 +2,7 @@ package executor
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/command"
-	"github.com/codecrafters-io/redis-starter-go/app/core"
+	"github.com/codecrafters-io/redis-starter-go/app/handler"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
@@ -25,14 +25,14 @@ func (te *TransactionExecutor) Execute(trans *command.Transaction) {
 	unblockedKeys := make([]string, 0)
 	
 	for i, cmd := range trans.Commands {
-		handler, ok := core.Handlers[cmd.Command]
+		cmdHandler, ok := handler.Handlers[cmd.Command]
 		if !ok {
 			logger.Warn("Unknown command in transaction", "command", cmd.Command)
 			result[i] = utils.ToError("unknown command: " + cmd.Command)
 			continue
 		}
 
-		timeout, setKeys, resp, err := handler(&cmd)
+		timeout, setKeys, resp, err := cmdHandler.Execute(&cmd)
 		if timeout >= 0 { // we assume that the transaction has no command that blocks
 			panic("transaction blocked")
 		}

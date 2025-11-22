@@ -7,10 +7,9 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
-	"github.com/codecrafters-io/redis-starter-go/app/constants"
-	rdb "github.com/codecrafters-io/redis-starter-go/app/parser"
 	"github.com/codecrafters-io/redis-starter-go/app/executor"
 	"github.com/codecrafters-io/redis-starter-go/app/logger"
+	rdb "github.com/codecrafters-io/redis-starter-go/app/parser"
 	"github.com/codecrafters-io/redis-starter-go/app/server"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
@@ -87,14 +86,14 @@ func main() {
 	// Load RDB file if configured
 	loadRDBFile(cfg)
 
-	// Create command queue
-	queue := command.NewQueue(constants.DefaultCommandQueueSize, constants.DefaultTransactionQueueSize)
+	// Initialize command queue singleton
+	command.GetQueueInstance()
 
 	// Start command executor in background
-	exec := executor.NewExecutor(queue)
+	exec := executor.NewExecutor()
 	go exec.Start()
 
 	// Create and start appropriate server (master or replica)
-	srv := server.NewServer(cfg, queue)
+	srv := server.NewServer(cfg)
 	srv.Run()
 }
