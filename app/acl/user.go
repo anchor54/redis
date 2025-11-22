@@ -32,6 +32,7 @@ func GetInstance() *ACLManager {
 		instance.SetUser(&User{
 			Username: "default",
 			Flags:    []string{"nopass"},
+			Passwords: []string{},
 		})
 	})
 	return instance
