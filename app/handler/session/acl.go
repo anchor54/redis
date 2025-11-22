@@ -93,7 +93,7 @@ func (h *ACLHandler) Execute(cmd *connection.Command, conn *connection.RedisConn
 		return nil
 
 	case "SETUSER":
-		password := cmd.Args[1]
+		password := cmd.Args[1][1:]
 		info, err := setUserPassword(username, password)
 		if err != nil {
 			return err
