@@ -901,7 +901,7 @@ func aclHandler(cmd *connection.Command) (int, []string, string, error) {
 		return -1, []string{}, "", ErrInvalidArguments
 	}
 
-	switch args[1] {
+	switch args[0] {
 	case "WHOAMI":
 		return -1, []string{}, utils.ToBulkString("default"), nil
 	case "GETUSER":
